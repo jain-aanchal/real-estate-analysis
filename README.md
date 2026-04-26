@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # STR Investment Analyzer
 
 Standalone web app for analyzing short-term rental (STR) property investments. Mirrors the logic in `STR Investment Analysis.xlsx` with live calculations and an offer-price optimizer.
