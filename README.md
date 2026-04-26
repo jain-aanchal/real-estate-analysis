@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # STR Investment Analyzer
 
 Standalone web app for analyzing short-term rental (STR) property investments. Mirrors the logic in `STR Investment Analysis.xlsx` with live calculations and an offer-price optimizer.
@@ -256,3 +257,6 @@ The app computes this for both Mid and High scenarios and suggests the **lower o
 - [Move.org — Average Utility Costs 2026](https://www.move.org/utility-bills-101/)
 - [ApartmentList — Apartment Utilities 2026](https://www.apartmentlist.com/renter-life/estimating-apartment-utilities-cost)
 >>>>>>> 297931b (Initial commit)
+=======
+
+>>>>>>> 957c3459a55706ef8540f1ed9c4f5998e3f7a903
