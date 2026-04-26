@@ -1,0 +1,24 @@
+{
+  "name": "str-investment-analyzer",
+  "version": "1.2.0",
+  "description": "Standalone web app to analyze short-term rental (STR) property investments. Integrates with AirDNA for live comparable property data, with Playwright-based Airbnb scraper as fallback.",
+  "author": "Aanchal Jain",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "start": "node server.mjs",
+    "static": "npx serve . -l 3200 --cors",
+    "install-scraper": "npm install playwright && npx playwright install chromium"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "optionalDependencies": {
+    "playwright": "^1.59.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

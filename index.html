@@ -1,0 +1,3217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>STR Investment Analyzer</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-2: #273449;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #3b82f6;
+    --green: #10b981;
+    --red: #ef4444;
+    --yellow: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+  header {
+    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0; font-size: 24px; }
+  header p { margin: 4px 0 0; color: #dbeafe; font-size: 14px; }
+
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px 32px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  @media (max-width: 960px) { .container { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .card h2 {
+    margin: 0 0 16px;
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+
+  .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 12px; }
+  .row label { color: var(--muted); font-size: 13px; flex: 1; }
+  .row input {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 8px 10px;
+    width: 130px;
+    text-align: right;
+    font-family: inherit;
+    font-size: 13px;
+  }
+  .row input:focus { outline: none; border-color: var(--accent); }
+
+  .scenario-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .scenario-grid .scenario {
+    background: var(--panel-2);
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .scenario h3 {
+    margin: 0 0 8px;
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .scenario .low h3 { color: #f87171; }
+  .scenario input { width: 100%; margin-bottom: 6px; }
+  .scenario label { font-size: 11px; color: var(--muted); }
+
+  .results-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+  }
+  .results-table th,
+  .results-table td {
+    padding: 8px 10px;
+    text-align: right;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .results-table th:first-child,
+  .results-table td:first-child { text-align: left; color: var(--muted); }
+  .results-table th {
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 11px;
+  }
+  .results-table tr.highlight td { font-weight: 700; color: var(--text); }
+  .positive { color: var(--green); }
+  .negative { color: var(--red); }
+  .pass { background: rgba(16, 185, 129, 0.15); }
+  .fail { background: rgba(239, 68, 68, 0.10); }
+
+  .offer-banner {
+    background: linear-gradient(135deg, #065f46, #10b981);
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    margin-top: 20px;
+  }
+  .offer-banner .label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #d1fae5;
+  }
+  .offer-banner .price {
+    font-size: 36px;
+    font-weight: 700;
+    color: white;
+    margin: 4px 0;
+  }
+  .offer-banner .sub { color: #d1fae5; font-size: 13px; }
+
+  .small-note {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  button.reset {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  button.reset:hover { background: var(--border); }
+
+  .flex-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .tag.pass { background: var(--green); color: white; }
+  .tag.fail { background: var(--red); color: white; }
+
+  footer {
+    text-align: center;
+    padding: 20px;
+    color: var(--muted);
+    font-size: 12px;
+    border-top: 1px solid var(--border);
+    margin-top: 20px;
+  }
+
+  /* Save button */
+  .save-btn {
+    background: white;
+    color: #1e40af;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  .save-btn:hover { background: #f1f5f9; transform: translateY(-1px); }
+
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    max-width: 560px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  }
+  .modal-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .modal-header h2 { margin: 0; font-size: 18px; color: var(--text); }
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 28px;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .modal-close:hover { color: var(--text); }
+  .modal-body { padding: 20px 24px; }
+
+  .save-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 540px) { .save-options { grid-template-columns: 1fr; } }
+  .save-option {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    text-align: left;
+    cursor: pointer;
+    color: var(--text);
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .save-option:hover {
+    border-color: var(--accent);
+    background: #2d3b55;
+    transform: translateY(-2px);
+  }
+  .save-icon { font-size: 28px; margin-bottom: 8px; }
+  .save-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+  .save-desc { font-size: 11px; color: var(--muted); line-height: 1.4; }
+
+  .save-status {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    display: none;
+  }
+  .save-status.show { display: block; }
+  .save-status.success { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid var(--green); }
+  .save-status.error { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid var(--red); }
+  .save-status.info { background: rgba(59,130,246,0.15); color: var(--accent); border: 1px solid var(--accent); }
+
+  .settings-panel {
+    margin-top: 16px;
+    padding: 12px;
+    background: var(--panel-2);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .settings-panel summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .settings-panel[open] summary { margin-bottom: 12px; }
+  .settings-panel code {
+    background: var(--panel);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 11px;
+  }
+
+  /* Tax source indicator */
+  .tax-source {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--green);
+    border: 1px solid var(--green);
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .tax-source:empty { display: none; }
+
+  /* Address autocomplete dropdown */
+  .autocomplete-wrapper { position: relative; display: inline-block; width: 260px; }
+  .autocomplete-wrapper input { width: 100%; }
+  .autocomplete-list {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 999;
+    background: var(--card); border: 1px solid var(--border); border-top: none;
+    border-radius: 0 0 8px 8px; max-height: 220px; overflow-y: auto;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25); display: none;
+  }
+  .autocomplete-list.visible { display: block; }
+  .autocomplete-item {
+    padding: 8px 12px; cursor: pointer; font-size: 0.85rem;
+    border-bottom: 1px solid var(--border); color: var(--fg);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .autocomplete-item:last-child { border-bottom: none; }
+  .autocomplete-item:hover, .autocomplete-item.active {
+    background: rgba(99,102,241,0.15); color: var(--accent);
+  }
+  .autocomplete-item .ac-secondary {
+    font-size: 0.75rem; color: var(--muted); margin-left: 6px;
+  }
+
+  /* AirDNA button */
+  button.airdna-btn {
+    background: linear-gradient(135deg, #0891b2, #06b6d4);
+    color: white;
+    border: none;
+    font-weight: 700;
+  }
+  button.airdna-btn:hover { background: linear-gradient(135deg, #0e7490, #0891b2); }
+  button.airroi-btn {
+    background: linear-gradient(135deg, #059669, #10b981);
+    color: white;
+    border: none;
+    font-weight: 700;
+  }
+  button.airroi-btn:hover { background: linear-gradient(135deg, #047857, #059669); }
+  button.scrape-btn {
+    background: linear-gradient(135deg, #7c3aed, #a855f7);
+    color: white;
+    border: none;
+    font-weight: 700;
+  }
+  button.scrape-btn:hover { background: linear-gradient(135deg, #6d28d9, #9333ea); }
+
+  /* Fallback panel (shown when AirDNA not configured) */
+  .fallback-panel {
+    margin-top: 14px;
+    padding: 14px;
+    background: linear-gradient(135deg, #78350f, #92400e);
+    border: 1px solid #f59e0b;
+    border-radius: 8px;
+  }
+  .fallback-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fef3c7;
+    margin-bottom: 12px;
+  }
+  .fallback-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  @media (max-width: 640px) { .fallback-options { grid-template-columns: 1fr; } }
+  .fallback-option {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    color: var(--text);
+    transition: all 0.15s;
+  }
+  .fallback-option:hover {
+    background: rgba(0, 0, 0, 0.4);
+    border-color: #f59e0b;
+    transform: translateY(-1px);
+  }
+  .fo-icon { font-size: 22px; margin-bottom: 6px; }
+  .fo-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; color: #fef3c7; }
+  .fo-desc { font-size: 11px; color: #fde68a; line-height: 1.3; }
+  .fallback-note {
+    margin-top: 12px;
+    font-size: 11px;
+    color: #fde68a;
+    padding-top: 10px;
+    border-top: 1px solid rgba(245, 158, 11, 0.3);
+  }
+  .fallback-note code {
+    background: rgba(0,0,0,0.3);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .airdna-status {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    display: none;
+  }
+  .airdna-status.show { display: block; }
+  .airdna-status.success { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid var(--green); }
+  .airdna-status.error { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid var(--red); }
+  .airdna-status.info { background: rgba(59,130,246,0.15); color: var(--accent); border: 1px solid var(--accent); }
+
+  /* Comps table */
+  .comps-wrapper {
+    max-height: 320px;
+    overflow-y: auto;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-top: 8px;
+  }
+  .comps-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    min-width: 720px;
+  }
+  .comps-table th, .comps-table td {
+    padding: 5px 6px;
+    border-bottom: 1px solid var(--border);
+    text-align: right;
+    white-space: nowrap;
+  }
+  .comps-table th:first-child, .comps-table td:first-child {
+    text-align: left;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .comps-table thead th {
+    background: var(--panel-2);
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  .comps-table tfoot th {
+    background: var(--panel-2);
+    color: var(--accent);
+    font-weight: 700;
+    border-top: 2px solid var(--accent);
+    border-bottom: none;
+  }
+  .comps-table input {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    width: 100%;
+    font-size: 11px;
+    text-align: right;
+    font-family: inherit;
+    padding: 2px 4px;
+    border-radius: 3px;
+  }
+  .comps-table input:focus {
+    outline: none;
+    background: var(--panel-2);
+  }
+  .comps-table input.comp-source {
+    text-align: left;
+  }
+  .comps-table .rm-btn {
+    background: none;
+    border: none;
+    color: var(--red);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 4px;
+  }
+  .comps-table .rm-btn:hover { color: #fca5a5; }
+
+  .comps-potential {
+    margin-top: 14px;
+    padding: 14px;
+    background: linear-gradient(135deg, #1e3a8a, #1e40af);
+    border-radius: 8px;
+    border: 1px solid #3b82f6;
+  }
+  .cp-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #dbeafe;
+    margin-bottom: 10px;
+  }
+  .cp-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  @media (max-width: 600px) { .cp-grid { grid-template-columns: repeat(2, 1fr); } }
+  .cp-label {
+    font-size: 10px;
+    color: #bfdbfe;
+    text-transform: uppercase;
+  }
+  .cp-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: white;
+    margin-top: 2px;
+  }
+  .apply-btn {
+    width: 100%;
+    background: white;
+    color: #1e40af;
+    border: none;
+    padding: 10px;
+    border-radius: 6px;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .apply-btn:hover { background: #f1f5f9; }
+
+  /* Tab switcher */
+  .tabs {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 16px 32px 0;
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-btn {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    color: var(--muted);
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); background: var(--panel-2); }
+  .tab-btn.active {
+    background: var(--panel-2);
+    color: var(--accent);
+    border-color: var(--accent);
+    border-bottom: 2px solid var(--panel-2);
+    margin-bottom: -1px;
+  }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .ltr-results {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .ltr-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .ltr-kpi {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+  .ltr-kpi .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }
+  .ltr-kpi .val { font-size: 18px; font-weight: 600; margin-top: 4px; }
+  .ltr-kpi .val.good { color: var(--green); }
+  .ltr-kpi .val.bad { color: var(--red); }
+  .ltr-kpi .val.warn { color: var(--yellow); }
+  .ltr-target {
+    background: linear-gradient(135deg, #065f46 0%, #10b981 100%);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+  .ltr-target .lbl { font-size: 12px; color: #d1fae5; text-transform: uppercase; }
+  .ltr-target .price { font-size: 28px; font-weight: 700; color: #fff; margin-top: 4px; }
+  .ltr-target .sub { font-size: 12px; color: #a7f3d0; margin-top: 4px; }
+
+  .ltr-action-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-right: 6px;
+    margin-bottom: 6px;
+  }
+  .ltr-action-btn:hover { background: #2563eb; }
+  .ltr-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .sales-table, .rent-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+  .sales-table th, .sales-table td, .rent-table th, .rent-table td {
+    border: 1px solid var(--border);
+    padding: 6px 8px;
+    text-align: left;
+  }
+  .sales-table th, .rent-table th { background: var(--panel-2); color: var(--muted); font-weight: 600; }
+
+  .link-pill {
+    display: inline-block;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 4px 12px;
+    font-size: 12px;
+    margin: 3px 3px 3px 0;
+    color: #93c5fd;
+    text-decoration: none;
+  }
+  .link-pill:hover { background: var(--border); color: #fff; }
+
+  /* Address input styling */
+  #address {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 8px 10px;
+    font-family: inherit;
+    font-size: 13px;
+  }
+  #address:focus { outline: none; border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1>STR Investment Analyzer</h1>
+      <p>Analyze short-term rental properties · Pre-filled with April 2026 market rates</p>
+    </div>
+    <button class="save-btn" onclick="openSaveModal()">💾 Save Analysis</button>
+  </div>
+</header>
+
+<!-- Tab switcher -->
+<div class="tabs">
+  <button class="tab-btn active" data-tab="str" onclick="switchTab('str')">🏖️ Short-Term Rental</button>
+  <button class="tab-btn" data-tab="ltr" onclick="switchTab('ltr')">🏢 Multi-Family LTR</button>
+</div>
+
+<!-- Save destination modal -->
+<div id="saveModal" class="modal-overlay" onclick="closeSaveModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Save Analysis as Excel</h2>
+      <button class="modal-close" onclick="closeSaveModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="row"><label>Filename</label>
+        <input type="text" id="saveFilename" value="STR Analysis.xlsx" style="width:220px; text-align:left;" />
+      </div>
+      <p class="small-note" style="margin:12px 0 16px;">Choose where to save your analysis:</p>
+      <div class="save-options">
+        <button class="save-option" onclick="saveToDisk()">
+          <div class="save-icon">💻</div>
+          <div class="save-title">Save to Disk</div>
+          <div class="save-desc">Download to your computer. Chrome/Edge will show a native "Save As" dialog.</div>
+        </button>
+        <button class="save-option" onclick="saveToGoogleDrive()">
+          <div class="save-icon">☁️</div>
+          <div class="save-title">Save to Google Drive</div>
+          <div class="save-desc">Upload directly to your Google Drive. Requires sign-in.</div>
+        </button>
+      </div>
+      <div id="saveStatus" class="save-status"></div>
+      <details class="settings-panel">
+        <summary>⚙️ Google Drive Settings</summary>
+        <p class="small-note">To save to Drive, create a Google OAuth Client ID (Web application) at <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:#60a5fa;">Google Cloud Console</a>, enable the Drive API, and add your origin (<code id="currentOrigin"></code>) to "Authorized JavaScript origins".</p>
+        <div class="row"><label>Google OAuth Client ID</label>
+          <input type="text" id="gClientId" placeholder="xxxx.apps.googleusercontent.com" style="width:260px; text-align:left;" />
+        </div>
+        <button class="reset" onclick="saveClientId()">Save Client ID</button>
+      </details>
+    </div>
+  </div>
+</div>
+
+<div id="tab-str" class="tab-content active">
+<div class="container">
+
+  <!-- LEFT COLUMN: Inputs -->
+  <div>
+    <div class="card">
+      <div class="flex-between">
+        <h2 style="margin:0; border:none; padding:0;">Property Details</h2>
+        <button class="reset" onclick="resetDefaults()">Reset Defaults</button>
+      </div>
+      <div class="row"><label>Property Address <span class="small-note" style="display:inline;">(auto-sets tax)</span></label>
+        <div class="autocomplete-wrapper">
+          <input type="text" id="address" placeholder="e.g. 123 Main St, Austin, TX 78701" style="width:260px; text-align:left;" autocomplete="off" />
+          <div class="autocomplete-list" id="addressDropdown"></div>
+        </div>
+      </div>
+      <div class="row"><label>Purchase Price</label>
+        <input type="number" id="purchasePrice" value="450000" />
+      </div>
+      <div class="row"><label>Down Payment %</label>
+        <input type="number" id="downPayment" value="20" step="1" />
+      </div>
+      <div class="row"><label>Closing Costs %</label>
+        <input type="number" id="closingPct" value="3.5" step="0.1" />
+      </div>
+      <div class="row"><label># Bedrooms <span id="bedroomsSource" class="tax-source"></span></label>
+        <input type="number" id="bedrooms" value="3" />
+      </div>
+      <div class="row"><label># Bathrooms <span id="bathroomsSource" class="tax-source"></span></label>
+        <input type="number" id="bathrooms" value="2" step="0.5" />
+      </div>
+      <div class="row"><label>Furnishing Cost / Bedroom</label>
+        <input type="number" id="furnishPerBr" value="5000" />
+      </div>
+      <div class="row"><label>Extra Common Spaces</label>
+        <input type="number" id="extraSpaces" value="1" />
+      </div>
+      <div class="row"><label>Cost / Extra Space</label>
+        <input type="number" id="extraSpaceCost" value="3000" />
+      </div>
+      <div class="row"><label>Rehab Cost</label>
+        <input type="number" id="rehab" value="0" />
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="flex-between">
+        <h2 style="margin:0; border:none; padding:0;">Revenue Scenarios</h2>
+        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+          <button class="reset airroi-btn" onclick="fetchAirROIEstimate()">📊 AirROI Estimate</button>
+          <span id="airroiStatus" class="tax-source"></span>
+        </div>
+      </div>
+      <div class="scenario-grid">
+        <div class="scenario">
+          <h3 style="color:#f87171;">Low</h3>
+          <label>ADR ($)</label>
+          <input type="number" id="adrLow" value="150" />
+          <label>Occupancy %</label>
+          <input type="number" id="occLow" value="50" />
+        </div>
+        <div class="scenario">
+          <h3 style="color:#f59e0b;">Mid</h3>
+          <label>ADR ($)</label>
+          <input type="number" id="adrMid" value="200" />
+          <label>Occupancy %</label>
+          <input type="number" id="occMid" value="60" />
+        </div>
+        <div class="scenario">
+          <h3 style="color:#10b981;">High</h3>
+          <label>ADR ($)</label>
+          <input type="number" id="adrHigh" value="275" />
+          <label>Occupancy %</label>
+          <input type="number" id="occHigh" value="75" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="flex-between">
+        <h2 style="margin:0; border:none; padding:0;">Comparable Properties</h2>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="reset airroi-btn" onclick="fetchAirROIComparables()">🌐 AirROI</button>
+          <button class="reset airdna-btn" onclick="fetchFromAirDNA()">🔍 AirDNA</button>
+          <button class="reset scrape-btn" onclick="scrapeAirbnb()">🕷️ Scrape</button>
+          <button class="reset" onclick="addCompRow()">+ Add</button>
+          <button class="reset" onclick="generateSampleComps()">✨ Sample</button>
+          <button class="reset" onclick="document.getElementById('csvInput').click()">CSV</button>
+          <input type="file" id="csvInput" accept=".csv" style="display:none" onchange="importCompsCSV(event)" />
+          <button class="reset" onclick="clearComps()">Clear</button>
+        </div>
+      </div>
+      <p class="small-note" style="margin-top:8px;">
+        <strong>Fetch from AirDNA</strong> = live comps via API key · <strong>Scrape</strong> = Playwright Airbnb scraper · <strong>CSV</strong> = import export · <strong>Sample</strong> = synthetic demo data.
+      </p>
+      <div id="airdnaStatus" class="airdna-status"></div>
+
+      <!-- Fallback panel: shown when AirDNA is not configured -->
+      <div id="fallbackPanel" class="fallback-panel" style="display:none;">
+        <div class="fallback-title">⚠️ AirDNA API not configured — use an alternative source</div>
+        <div class="fallback-options">
+          <button class="fallback-option" onclick="document.getElementById('csvInput').click()">
+            <div class="fo-icon">📥</div>
+            <div class="fo-title">Upload CSV</div>
+            <div class="fo-desc">Import comps from an AirDNA/Rabbu/PriceLabs export or any CSV.</div>
+          </button>
+          <button class="fallback-option" onclick="scrapeAirbnb()">
+            <div class="fo-icon">🕷️</div>
+            <div class="fo-title">Scrape Airbnb</div>
+            <div class="fo-desc">Run Playwright locally to pull listings. <em>Requires setup.</em></div>
+          </button>
+          <button class="fallback-option" onclick="generateSampleComps()">
+            <div class="fo-icon">✨</div>
+            <div class="fo-title">Sample Data</div>
+            <div class="fo-desc">Synthetic comps based on state & bedrooms — for demo only.</div>
+          </button>
+        </div>
+        <div class="fallback-note">
+          ⓘ To enable live AirDNA comps: copy <code>.env.example</code> → <code>.env</code>, add your <code>AIRDNA_API_KEY</code>, then restart the server.
+        </div>
+      </div>
+
+      <div class="comps-wrapper">
+        <table class="comps-table">
+          <thead>
+            <tr>
+              <th>Source/URL</th>
+              <th>ADR</th>
+              <th>Occ %</th>
+              <th>BR</th>
+              <th>BA</th>
+              <th>Sleeps</th>
+              <th>Days Avail</th>
+              <th>Reviews</th>
+              <th>Annual Rev</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="compsTbody">
+            <!-- rows injected here -->
+          </tbody>
+          <tfoot>
+            <tr class="comps-averages">
+              <th>Average</th>
+              <th id="avgAdr">—</th>
+              <th id="avgOcc">—</th>
+              <th id="avgBr">—</th>
+              <th id="avgBa">—</th>
+              <th id="avgSleeps">—</th>
+              <th id="avgDays">—</th>
+              <th id="avgReviews">—</th>
+              <th id="avgRevenue">—</th>
+              <th></th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div id="compsPotential" class="comps-potential" style="display:none;">
+        <div class="cp-title">📊 Revenue Potential (from comps)</div>
+        <div class="cp-grid">
+          <div><div class="cp-label">Suggested ADR</div><div class="cp-value" id="cpAdr">—</div></div>
+          <div><div class="cp-label">Est. Occupancy</div><div class="cp-value" id="cpOcc">—</div></div>
+          <div><div class="cp-label">Annual Revenue</div><div class="cp-value" id="cpRevenue">—</div></div>
+          <div><div class="cp-label">Comps Used</div><div class="cp-value" id="cpCount">—</div></div>
+        </div>
+        <button class="apply-btn" onclick="applyCompsToScenarios()">Apply to Low / Mid / High Scenarios →</button>
+        <div class="small-note" style="margin-top:8px;">
+          Low = 80% of avg ADR · Mid = 100% · High = 120% · Occupancies spread ±10pts
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Monthly Operating Expenses</h2>
+      <p class="small-note">Pre-filled with April 2026 research averages. Adjust as needed.</p>
+      <div class="row"><label>Property Tax (% annual) <span id="taxSource" class="tax-source"></span></label>
+        <input type="number" id="taxRate" value="1.1" step="0.01" />
+      </div>
+      <div class="row"><label>Insurance (monthly)</label>
+        <input type="number" id="insurance" value="200" />
+      </div>
+      <div class="row"><label>HOA (monthly)</label>
+        <input type="number" id="hoa" value="0" />
+      </div>
+      <div class="row"><label>Water</label>
+        <input type="number" id="water" value="50" />
+      </div>
+      <div class="row"><label>Gas</label>
+        <input type="number" id="gas" value="35" />
+      </div>
+      <div class="row"><label>Electric</label>
+        <input type="number" id="electric" value="140" />
+      </div>
+      <div class="row"><label>WiFi + TV/Cable</label>
+        <input type="number" id="wifi" value="100" />
+      </div>
+      <div class="row"><label>CAPEX Reserve</label>
+        <input type="number" id="capex" value="100" />
+      </div>
+      <div class="row"><label>Incidentals (supplies)</label>
+        <input type="number" id="incidentals" value="75" />
+      </div>
+      <div class="row"><label>Maintenance</label>
+        <input type="number" id="maintenance" value="100" />
+      </div>
+      <div class="row"><label>Guesty / Hospitable</label>
+        <input type="number" id="guesty" value="25" />
+      </div>
+      <div class="row"><label>PriceLabs</label>
+        <input type="number" id="pricelabs" value="20" />
+      </div>
+      <div class="row"><label>City Permit</label>
+        <input type="number" id="permit" value="0" />
+      </div>
+      <div class="row"><label>Cleaning Fees (if not in revenue)</label>
+        <input type="number" id="cleaning" value="0" />
+      </div>
+      <div class="row"><label>Property Manager % of Revenue</label>
+        <input type="number" id="pmPct" value="0" step="0.5" />
+      </div>
+      <div class="row"><label>Airbnb Service Fee %</label>
+        <input type="number" id="airbnbFee" value="3" step="0.1" />
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Mortgage</h2>
+      <div class="row"><label>Interest Rate (% — Investment, Apr 2026)</label>
+        <input type="number" id="rate" value="7.25" step="0.01" />
+      </div>
+      <div class="row"><label>Term (years)</label>
+        <input type="number" id="term" value="30" />
+      </div>
+      <p class="small-note">Source: Bankrate/TheMortgageReports Apr 2026 — investment property 30yr fixed ~7.25% (primary ~6.5% + 0.5-0.75% premium)</p>
+    </div>
+  </div>
+
+  <!-- RIGHT COLUMN: Results -->
+  <div>
+    <div class="card">
+      <h2>Investment Summary</h2>
+      <table class="results-table">
+        <tr><td>Down Payment</td><td id="r_downpay"></td></tr>
+        <tr><td>Closing Costs</td><td id="r_closing"></td></tr>
+        <tr><td>Furnishing</td><td id="r_furnish"></td></tr>
+        <tr><td>Rehab</td><td id="r_rehab"></td></tr>
+        <tr class="highlight"><td>Total Money Invested</td><td id="r_total"></td></tr>
+        <tr><td>Loan Amount</td><td id="r_loan"></td></tr>
+        <tr><td>Monthly Mortgage (P&amp;I)</td><td id="r_mortgage"></td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Revenue & NOI by Scenario</h2>
+      <table class="results-table">
+        <tr>
+          <th></th><th>Low</th><th>Mid</th><th>High</th>
+        </tr>
+        <tr><td>Monthly Revenue</td>
+          <td id="rev_low"></td><td id="rev_mid"></td><td id="rev_high"></td></tr>
+        <tr><td>Annual Revenue</td>
+          <td id="rev_low_a"></td><td id="rev_mid_a"></td><td id="rev_high_a"></td></tr>
+        <tr><td>Monthly OpEx</td>
+          <td id="opex_low"></td><td id="opex_mid"></td><td id="opex_high"></td></tr>
+        <tr><td>Monthly NOI (pre-mortgage)</td>
+          <td id="noi_low"></td><td id="noi_mid"></td><td id="noi_high"></td></tr>
+        <tr class="highlight"><td>Annual NOI</td>
+          <td id="noi_low_a"></td><td id="noi_mid_a"></td><td id="noi_high_a"></td></tr>
+        <tr><td>Monthly Cash Flow (after mortgage)</td>
+          <td id="cf_low"></td><td id="cf_mid"></td><td id="cf_high"></td></tr>
+        <tr><td>Annual Cash Flow</td>
+          <td id="cf_low_a"></td><td id="cf_mid_a"></td><td id="cf_high_a"></td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Key Metrics</h2>
+      <table class="results-table">
+        <tr>
+          <th></th><th>Low</th><th>Mid</th><th>High</th>
+        </tr>
+        <tr><td>Cap Rate</td>
+          <td id="cap_low"></td><td id="cap_mid"></td><td id="cap_high"></td></tr>
+        <tr><td>Cash-on-Cash Return</td>
+          <td id="coc_low"></td><td id="coc_mid"></td><td id="coc_high"></td></tr>
+        <tr><td>Gross Rent Multiplier</td>
+          <td id="grm_low"></td><td id="grm_mid"></td><td id="grm_high"></td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>🎯 Target Offer Price (Cap Rate ≥ 20%)</h2>
+      <p class="small-note">Maximum price at which Mid and High scenarios achieve 20%+ cap rate</p>
+      <table class="results-table">
+        <tr><td>Max Offer @ 20% (Mid)</td><td id="offer_mid"></td></tr>
+        <tr><td>Max Offer @ 20% (High)</td><td id="offer_high"></td></tr>
+      </table>
+      <div class="offer-banner">
+        <div class="label">Suggested Maximum Offer Price</div>
+        <div class="price" id="offer_suggested">—</div>
+        <div class="sub" id="offer_sub">Lower of Mid/High to protect both scenarios</div>
+      </div>
+      <table class="results-table" style="margin-top:16px;">
+        <tr><th>At suggested price:</th><th>Value</th><th>Target</th><th>Status</th></tr>
+        <tr><td>Mid Cap Rate</td><td id="v_mid_cap"></td><td>≥ 20.0%</td><td id="v_mid_status"></td></tr>
+        <tr><td>High Cap Rate</td><td id="v_high_cap"></td><td>≥ 20.0%</td><td id="v_high_status"></td></tr>
+        <tr><td>Mid Monthly Cash Flow</td><td id="v_mid_cf" colspan="3" style="text-align:right;"></td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+</div> <!-- /tab-str -->
+
+<!-- =================================================================== -->
+<!-- LTR (Multi-Family Long-Term Rental) Tab                              -->
+<!-- =================================================================== -->
+<div id="tab-ltr" class="tab-content">
+<div class="container">
+
+  <!-- LEFT: LTR Inputs -->
+  <div>
+    <div class="card">
+      <div class="flex-between">
+        <h2 style="margin:0; border:none; padding:0;">🏢 Property Details</h2>
+        <button class="reset" onclick="resetLTRDefaults()">Reset Defaults</button>
+      </div>
+      <div class="row"><label>Property Address</label>
+        <div class="autocomplete-wrapper">
+          <input type="text" id="ltr_address" placeholder="e.g. 500 Oak Ave, Cleveland, OH 44113" style="width:260px; text-align:left;" autocomplete="off" />
+          <div class="autocomplete-list" id="ltr_addressDropdown"></div>
+        </div>
+      </div>
+      <div class="row"><label># of Units <span class="small-note" style="display:inline;">(>4 → commercial loan)</span></label>
+        <input type="number" id="ltr_units" value="4" min="1" max="200" />
+      </div>
+      <div class="row"><label>Bedrooms per Unit (avg)</label>
+        <input type="number" id="ltr_bedrooms" value="2" min="0" step="1" />
+      </div>
+      <div class="row"><label>Bathrooms per Unit (avg)</label>
+        <input type="number" id="ltr_bathrooms" value="1" min="0" step="0.5" />
+      </div>
+      <div class="row"><label>Year Built</label>
+        <input type="number" id="ltr_yearBuilt" value="1980" min="1800" max="2030" />
+      </div>
+      <div class="row"><label>Asking / Purchase Price ($)</label>
+        <input type="number" id="ltr_price" value="750000" step="1000" />
+      </div>
+
+      <div style="margin-top:12px;">
+        <button class="ltr-action-btn" onclick="ltrAutoFetch()">🔍 Auto-Fetch Property Info</button>
+        <button class="ltr-action-btn" onclick="ltrFetchRent()">💵 Fetch Rent Estimate</button>
+        <button class="ltr-action-btn" onclick="ltrFetchSales()">📜 Sales History</button>
+        <button class="ltr-action-btn" onclick="ltrFetchMortgage()">🏛️ Mortgage / Records</button>
+      </div>
+      <div id="ltr_fetchStatus" class="small-note" style="margin-top:6px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Financing</h2>
+      <div class="row"><label>Down Payment %</label>
+        <input type="number" id="ltr_downPct" value="35" step="1" min="0" max="100" />
+      </div>
+      <div class="row"><label>Loan Type <span id="ltr_loanTypeBadge" class="small-note" style="display:inline;"></span></label>
+        <select id="ltr_loanType" style="background:var(--panel-2); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:7px 10px; width:130px;">
+          <option value="auto">Auto (by units)</option>
+          <option value="residential">Residential (≤4 units)</option>
+          <option value="commercial">Commercial (>4 units)</option>
+        </select>
+      </div>
+      <div class="row"><label>Interest Rate % <span id="ltr_rateSource" class="small-note" style="display:inline;"></span></label>
+        <input type="number" id="ltr_rate" value="7.25" step="0.01" />
+      </div>
+      <div class="row"><label>Loan Term (years)</label>
+        <input type="number" id="ltr_term" value="30" step="1" min="5" max="40" />
+      </div>
+      <div class="row"><label>Closing Costs ($)</label>
+        <input type="number" id="ltr_closingCosts" value="15000" step="500" />
+      </div>
+      <div class="row"><label>Prime Rate % <span id="ltr_primeAsOf" class="small-note" style="display:inline;"></span></label>
+        <input type="number" id="ltr_primeRate" value="8.50" step="0.01" readonly style="opacity:0.7;" />
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Income (Per Unit / Month)</h2>
+      <div class="row"><label>Rent per Unit ($)</label>
+        <input type="number" id="ltr_rentPerUnit" value="1400" step="10" />
+      </div>
+      <div class="row"><label>Other Income / Unit ($) <span class="small-note" style="display:inline;">(laundry, parking)</span></label>
+        <input type="number" id="ltr_otherIncome" value="25" step="5" />
+      </div>
+      <div class="row"><label>Vacancy Rate %</label>
+        <input type="number" id="ltr_vacancy" value="6" step="0.5" />
+      </div>
+      <div class="row"><label>Annual Rent Growth %</label>
+        <input type="number" id="ltr_rentGrowth" value="3" step="0.1" />
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Operating Expenses</h2>
+      <div class="row"><label>Property Tax Rate % <span class="small-note" style="display:inline;">(auto from state)</span></label>
+        <input type="number" id="ltr_taxRate" value="1.1" step="0.01" />
+      </div>
+      <div class="row"><label>Insurance / Unit / Month ($)</label>
+        <input type="number" id="ltr_insurance" value="45" step="1" />
+      </div>
+      <div class="row"><label>Maintenance % of Rent</label>
+        <input type="number" id="ltr_maintPct" value="8" step="0.5" />
+      </div>
+      <div class="row"><label>CapEx Reserves % of Rent</label>
+        <input type="number" id="ltr_capexPct" value="5" step="0.5" />
+      </div>
+      <div class="row"><label>Property Management % of Rent</label>
+        <input type="number" id="ltr_pmPct" value="8" step="0.5" />
+      </div>
+      <div class="row"><label>Utilities / Unit / Month ($) <span class="small-note" style="display:inline;">(owner-paid portion)</span></label>
+        <input type="number" id="ltr_utilities" value="50" step="5" />
+      </div>
+      <div class="row"><label>HOA / Trash / Other / Month ($)</label>
+        <input type="number" id="ltr_otherOpex" value="150" step="25" />
+      </div>
+      <div class="row"><label>Appreciation % / year <span class="small-note" style="display:inline;">(for ROI)</span></label>
+        <input type="number" id="ltr_appreciation" value="3" step="0.1" />
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: LTR Results -->
+  <div>
+    <div class="card">
+      <h2>📊 Key Metrics</h2>
+      <div class="ltr-target">
+        <div class="lbl">Target Buy Price @ 15% Cap Rate</div>
+        <div class="price" id="ltr_targetPrice">$—</div>
+        <div class="sub" id="ltr_targetPriceDelta">—</div>
+      </div>
+
+      <div class="ltr-kpi-grid">
+        <div class="ltr-kpi"><div class="lbl">Cap Rate</div><div class="val" id="ltr_capRate">—</div></div>
+        <div class="ltr-kpi"><div class="lbl">Cash-on-Cash</div><div class="val" id="ltr_coc">—</div></div>
+        <div class="ltr-kpi"><div class="lbl">Total ROI (5yr)</div><div class="val" id="ltr_roi">—</div></div>
+      </div>
+
+      <div class="ltr-kpi-grid">
+        <div class="ltr-kpi"><div class="lbl">Monthly Rent (Gross)</div><div class="val" id="ltr_monthlyRent">—</div></div>
+        <div class="ltr-kpi"><div class="lbl">Annual Rev (EGI)</div><div class="val" id="ltr_egi">—</div></div>
+        <div class="ltr-kpi"><div class="lbl">NOI (Annual)</div><div class="val" id="ltr_noi">—</div></div>
+      </div>
+
+      <div class="ltr-kpi-grid">
+        <div class="ltr-kpi"><div class="lbl">Monthly OpEx</div><div class="val" id="ltr_monthlyOpex">—</div></div>
+        <div class="ltr-kpi"><div class="lbl">Monthly Mortgage (P&I)</div><div class="val" id="ltr_monthlyMortgage">—</div></div>
+        <div class="ltr-kpi"><div class="lbl">Monthly Cash Flow</div><div class="val" id="ltr_monthlyCF">—</div></div>
+      </div>
+
+      <div class="ltr-kpi-grid">
+        <div class="ltr-kpi"><div class="lbl">Annual Cash Flow</div><div class="val" id="ltr_annualCF">—</div></div>
+        <div class="ltr-kpi"><div class="lbl">DSCR</div><div class="val" id="ltr_dscr">—</div></div>
+        <div class="ltr-kpi"><div class="lbl">Cash Needed</div><div class="val" id="ltr_cashNeeded">—</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>💵 Rent Comparables <span id="ltr_rentSources" class="small-note"></span></h2>
+      <div id="ltr_rentResults" class="small-note">Click <b>Fetch Rent Estimate</b> above to pull rent data from RentCast AVM (+ Dwellsy if available).</div>
+    </div>
+
+    <div class="card">
+      <h2>📜 Sales History</h2>
+      <div id="ltr_salesResults" class="small-note">Click <b>Sales History</b> above to pull the full transaction history for this property.</div>
+    </div>
+
+    <div class="card">
+      <h2>🏛️ Public Records / Mortgage Lookup</h2>
+      <div id="ltr_mortgageResults" class="small-note">Click <b>Mortgage / Records</b> above for deep-links to county recorder + tax assessor portals.</div>
+    </div>
+
+    <div class="card">
+      <h2>📋 OpEx Breakdown (Monthly)</h2>
+      <table class="validation-table" id="ltr_opexBreakdown">
+        <tr><th>Line Item</th><th style="text-align:right;">Amount</th><th style="text-align:right;">% of GPR</th></tr>
+      </table>
+    </div>
+  </div>
+</div>
+</div> <!-- /tab-ltr -->
+
+<footer>
+  Data sources: Bankrate, TheMortgageReports, Tax Foundation, Move.org, ApartmentList · April 2026
+</footer>
+
+<script>
+// ============================================================
+// State Property Tax Rates — tuned for INVESTMENT-PROPERTY BUYERS
+// Source: Tax Foundation 2026 (taxfoundation.org/data/all/state/property-taxes-by-state-county/)
+// NOTE: For states with assessment-growth caps that primarily benefit
+// long-term homesteaders (CA Prop 13, OR Measure 50, MI Proposal A),
+// we use the NEW-BUYER rate (assessed at purchase price) not the
+// median-taxes / median-value effective rate — which is artificially
+// low in those states because long-term owners distort the median.
+// For non-homestead/investment use, caps like FL Save Our Homes don't
+// apply, so effective rates roughly equal new-buyer rates.
+// ============================================================
+const STATE_TAX_RATES = {
+  AL: 0.30, AK: 1.07, AZ: 0.48, AR: 0.50, CA: 1.25, // CA: 1% Prop 13 base + local bonds/Mello-Roos ≈ 1.10%–1.30% for new buyers
+  CO: 0.42, CT: 1.55, DE: 0.49, FL: 0.91, GA: 0.80, // FL: investment rate (Save-Our-Homes cap doesn't apply to non-homestead)
+  HI: 0.28, ID: 0.46, IL: 1.74, IN: 0.69, IA: 1.23,
+  KS: 1.35, KY: 0.66, LA: 0.40, ME: 0.99, MD: 0.88,
+  MA: 1.02, MI: 1.35, MN: 0.95, MS: 0.54, MO: 0.67, // MI: Proposal A — new-buyer rate higher than effective
+  MT: 0.62, NE: 1.18, NV: 0.60, NH: 2.18, NJ: 2.13,
+  NM: 0.80, NY: 1.72, NC: 0.84, ND: 0.98, OH: 1.56,
+  OK: 0.90, OR: 1.05, PA: 1.58, RI: 1.63, SC: 0.57, // OR: Measure 50 — new-buyer rate higher than effective median
+  SD: 1.31, TN: 0.71, TX: 1.80, UT: 0.60, VT: 1.90,
+  VA: 0.82, WA: 0.94, WV: 0.58, WI: 1.85, WY: 0.61,
+  DC: 0.55
+};
+const STATE_NAMES = {
+  'ALABAMA': 'AL', 'ALASKA': 'AK', 'ARIZONA': 'AZ', 'ARKANSAS': 'AR',
+  'CALIFORNIA': 'CA', 'COLORADO': 'CO', 'CONNECTICUT': 'CT', 'DELAWARE': 'DE',
+  'FLORIDA': 'FL', 'GEORGIA': 'GA', 'HAWAII': 'HI', 'IDAHO': 'ID',
+  'ILLINOIS': 'IL', 'INDIANA': 'IN', 'IOWA': 'IA', 'KANSAS': 'KS',
+  'KENTUCKY': 'KY', 'LOUISIANA': 'LA', 'MAINE': 'ME', 'MARYLAND': 'MD',
+  'MASSACHUSETTS': 'MA', 'MICHIGAN': 'MI', 'MINNESOTA': 'MN', 'MISSISSIPPI': 'MS',
+  'MISSOURI': 'MO', 'MONTANA': 'MT', 'NEBRASKA': 'NE', 'NEVADA': 'NV',
+  'NEW HAMPSHIRE': 'NH', 'NEW JERSEY': 'NJ', 'NEW MEXICO': 'NM', 'NEW YORK': 'NY',
+  'NORTH CAROLINA': 'NC', 'NORTH DAKOTA': 'ND', 'OHIO': 'OH', 'OKLAHOMA': 'OK',
+  'OREGON': 'OR', 'PENNSYLVANIA': 'PA', 'RHODE ISLAND': 'RI', 'SOUTH CAROLINA': 'SC',
+  'SOUTH DAKOTA': 'SD', 'TENNESSEE': 'TN', 'TEXAS': 'TX', 'UTAH': 'UT',
+  'VERMONT': 'VT', 'VIRGINIA': 'VA', 'WASHINGTON': 'WA', 'WEST VIRGINIA': 'WV',
+  'WISCONSIN': 'WI', 'WYOMING': 'WY', 'DISTRICT OF COLUMBIA': 'DC'
+};
+
+// Parse US state from an address string (checks 2-letter abbrev then full name)
+function parseStateFromAddress(address) {
+  if (!address) return null;
+  const upper = address.toUpperCase().trim();
+
+  // Prefer 2-letter code in standard "City, ST ZIP" format or end of string
+  // e.g. "123 Main St, Austin, TX 78701" or "...Austin TX"
+  const abbrevMatch = upper.match(/[,\s]([A-Z]{2})(\s+\d{5}(-\d{4})?)?\s*$/);
+  if (abbrevMatch && STATE_TAX_RATES[abbrevMatch[1]]) {
+    return abbrevMatch[1];
+  }
+
+  // Also check for standalone 2-letter code surrounded by word boundaries
+  const anyAbbrev = upper.match(/\b([A-Z]{2})\b/g);
+  if (anyAbbrev) {
+    for (const code of anyAbbrev) {
+      if (STATE_TAX_RATES[code]) return code;
+    }
+  }
+
+  // Fallback: check full state names (longest first to handle "NEW YORK" before "NEW")
+  const names = Object.keys(STATE_NAMES).sort((a, b) => b.length - a.length);
+  for (const name of names) {
+    if (upper.includes(name)) return STATE_NAMES[name];
+  }
+
+  return null;
+}
+
+function applyTaxFromAddress() {
+  const address = $('address').value;
+  const state = parseStateFromAddress(address);
+  const badge = $('taxSource');
+  if (state && STATE_TAX_RATES[state]) {
+    const rate = STATE_TAX_RATES[state];
+    $('taxRate').value = rate;
+    badge.textContent = `Auto: ${state} (${rate.toFixed(2)}%)`;
+    badge.title = `Property tax auto-set from state ${state}. Source: Tax Foundation / WalletHub 2026 effective rates.`;
+    calculate();
+  } else if (address.trim()) {
+    badge.textContent = 'State not detected';
+    badge.style.background = 'rgba(245, 158, 11, 0.15)';
+    badge.style.color = 'var(--yellow)';
+    badge.style.borderColor = 'var(--yellow)';
+  } else {
+    badge.textContent = '';
+    badge.style.cssText = '';
+  }
+}
+
+// ---- Auto-fetch BR/BA via fallback chain: RentCast → Redfin → Zillow ----
+// Called after the address is entered. Tries each source in order until one succeeds.
+let lastLookupAddress = '';
+async function autoFetchPropertyDetails() {
+  const address = $('address').value.trim();
+  if (!address || address === lastLookupAddress) return;
+  lastLookupAddress = address;
+
+  const brBadge = $('bedroomsSource');
+  const baBadge = $('bathroomsSource');
+  baBadge.textContent = '';
+
+  const setBadgeState = (badge, text, state) => {
+    badge.textContent = text;
+    const colors = {
+      neutral: { bg: '148,163,184', cssVar: 'muted', border: 'border' },
+      warn:    { bg: '245,158,11',  cssVar: 'yellow', border: 'yellow' },
+      error:   { bg: '239,68,68',   cssVar: 'red',    border: 'red' },
+      ok:      null
+    };
+    const c = colors[state];
+    if (!c) { badge.style.cssText = ''; return; }
+    badge.style.background = `rgba(${c.bg},0.15)`;
+    badge.style.color = `var(--${c.cssVar})`;
+    badge.style.borderColor = `var(--${c.border})`;
+  };
+
+  // Check backend health
+  const health = await fetch('/api/health').then(r => r.json()).catch(() => null);
+  if (!health) {
+    setBadgeState(brBadge, 'Backend offline', 'neutral');
+    return;
+  }
+
+  // Build an ordered list of sources to try based on what's available
+  const sources = [];
+  if (health.rentcast_configured) sources.push({ name: 'RentCast', endpoint: '/api/rentcast/property' });
+  if (health.redfin_available)    sources.push({ name: 'Redfin',   endpoint: '/api/redfin/property' });
+  if (health.scraper_installed)   sources.push({ name: 'Redfin Browser', endpoint: '/api/redfin-scrape/property' });
+  if (health.zillow_available)    sources.push({ name: 'Zillow',   endpoint: '/api/zillow/property' });
+
+  if (!sources.length) {
+    setBadgeState(brBadge, 'No lookup sources', 'warn');
+    return;
+  }
+
+  const errors = [];
+  for (const src of sources) {
+    setBadgeState(brBadge, `⟳ ${src.name} lookup...`, 'ok');
+    try {
+      const res = await fetch(src.endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const captcha = /captcha/i.test((data.stderr || '') + (data.error || ''));
+        errors.push(`${src.name}: ${captcha ? 'blocked (captcha)' : (data.error || res.status)}`);
+        console.warn(`[${src.name}] failed`, data);
+        continue;
+      }
+
+      const br = Number(data.bedrooms) || 0;
+      const ba = Number(data.bathrooms) || 0;
+      if (!br && !ba) {
+        errors.push(`${src.name}: no BR/BA`);
+        continue;
+      }
+
+      // Success — fill fields and stop chain
+      if (br > 0) {
+        $('bedrooms').value = br;
+        setBadgeState(brBadge, `${src.name}: ${br} BR`, 'ok');
+      }
+      if (ba > 0) {
+        $('bathrooms').value = ba;
+        setBadgeState(baBadge, `${src.name}: ${ba} BA`, 'ok');
+      }
+      calculate();
+      console.log(`[${src.name} lookup]`, data);
+      return;
+    } catch (err) {
+      errors.push(`${src.name}: ${err.message}`);
+      console.warn(`[${src.name}] error`, err);
+    }
+  }
+
+  // All sources exhausted
+  setBadgeState(brBadge, 'All sources failed', 'error');
+  console.error('[property lookup] all sources failed:', errors);
+}
+
+// Unified handler: tax lookup (instant, no API) + property details (async)
+function onAddressChange() {
+  applyTaxFromAddress();
+  autoFetchPropertyDetails();
+}
+
+// ============================================================
+// COMPARABLE PROPERTIES
+// ============================================================
+// State STR tourism tier — base ADR per bedroom for sample generation
+// Rough approximations based on AirDNA/Rabbu public market reports 2024-2026
+const STR_ADR_PER_BR = {
+  // Top tier — premium destinations
+  HI: 140, CA: 110, NY: 115, FL: 100, CO: 105, NV: 95, TN: 90,
+  // Strong — vacation / metro hubs
+  TX: 85, AZ: 85, MA: 90, WA: 85, OR: 80, UT: 85, SC: 75, NC: 75,
+  // Mid tier
+  GA: 70, DC: 95, MD: 75, VA: 70, PA: 70, NJ: 80, IL: 75, MI: 65,
+  VT: 80, NH: 75, ME: 80, MN: 65, WI: 65, MT: 75, WY: 85, ID: 70,
+  NM: 70, AK: 90, RI: 80, CT: 80, DE: 75,
+  // Lower tier
+  OH: 60, IN: 60, IA: 55, KS: 55, NE: 55, ND: 55, SD: 60, MO: 60,
+  KY: 60, WV: 55, AL: 60, MS: 55, LA: 65, AR: 55, OK: 60
+};
+const DEFAULT_ADR_PER_BR = 70;
+
+let comps = []; // array of { source, adr, occ, br, ba, sleeps, daysAvail, reviews, revenue }
+
+function newBlankComp() {
+  return { source: '', adr: 0, occ: 0, br: 0, ba: 0, sleeps: 0, daysAvail: 0, reviews: 0, revenue: 0 };
+}
+
+function renderComps() {
+  const tbody = document.getElementById('compsTbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  comps.forEach((c, idx) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" class="comp-source" data-field="source" data-idx="${idx}" value="${escapeAttr(c.source)}" placeholder="Airbnb URL or name" /></td>
+      <td><input type="number" data-field="adr" data-idx="${idx}" value="${c.adr || ''}" /></td>
+      <td><input type="number" data-field="occ" data-idx="${idx}" value="${c.occ || ''}" /></td>
+      <td><input type="number" data-field="br" data-idx="${idx}" value="${c.br || ''}" /></td>
+      <td><input type="number" data-field="ba" data-idx="${idx}" value="${c.ba || ''}" step="0.5" /></td>
+      <td><input type="number" data-field="sleeps" data-idx="${idx}" value="${c.sleeps || ''}" /></td>
+      <td><input type="number" data-field="daysAvail" data-idx="${idx}" value="${c.daysAvail || ''}" /></td>
+      <td><input type="number" data-field="reviews" data-idx="${idx}" value="${c.reviews || ''}" /></td>
+      <td><input type="number" data-field="revenue" data-idx="${idx}" value="${c.revenue || ''}" /></td>
+      <td><button class="rm-btn" onclick="removeCompRow(${idx})">×</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // Bind input listeners for all comp cells
+  tbody.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('input', onCompInputChange);
+  });
+
+  computeCompAverages();
+  saveComps();
+}
+
+function escapeAttr(s) {
+  return String(s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+function onCompInputChange(e) {
+  const idx = parseInt(e.target.dataset.idx);
+  const field = e.target.dataset.field;
+  const val = field === 'source' ? e.target.value : (parseFloat(e.target.value) || 0);
+  comps[idx][field] = val;
+
+  // Auto-compute revenue if adr + occ set and revenue blank
+  if ((field === 'adr' || field === 'occ') && comps[idx].adr > 0 && comps[idx].occ > 0 && !comps[idx].revenue) {
+    comps[idx].revenue = Math.round(comps[idx].adr * (comps[idx].occ / 100) * 365);
+    const revInput = document.querySelector(`input[data-field="revenue"][data-idx="${idx}"]`);
+    if (revInput) revInput.value = comps[idx].revenue;
+  }
+
+  computeCompAverages();
+  saveComps();
+}
+
+function addCompRow() {
+  comps.push(newBlankComp());
+  renderComps();
+}
+
+function removeCompRow(idx) {
+  comps.splice(idx, 1);
+  renderComps();
+}
+
+function clearComps() {
+  if (!confirm('Remove all comps?')) return;
+  comps = [];
+  renderComps();
+  document.getElementById('compsPotential').style.display = 'none';
+}
+
+function avgOf(key) {
+  const vals = comps.map(c => c[key]).filter(v => v > 0);
+  if (!vals.length) return 0;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+function computeCompAverages() {
+  const n = comps.filter(c => c.adr > 0 || c.revenue > 0).length;
+  const avgAdr = avgOf('adr');
+  const avgOcc = avgOf('occ');
+  const avgBr = avgOf('br');
+  const avgBa = avgOf('ba');
+  const avgSleeps = avgOf('sleeps');
+  const avgDays = avgOf('daysAvail');
+  const avgReviews = avgOf('reviews');
+  const avgRevenue = avgOf('revenue');
+
+  const fmt$ = (n) => isFinite(n) && n > 0 ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }) : '—';
+  const fmtN = (n, d = 1) => isFinite(n) && n > 0 ? n.toFixed(d) : '—';
+
+  document.getElementById('avgAdr').textContent = fmt$(avgAdr);
+  document.getElementById('avgOcc').textContent = avgOcc > 0 ? avgOcc.toFixed(0) + '%' : '—';
+  document.getElementById('avgBr').textContent = fmtN(avgBr);
+  document.getElementById('avgBa').textContent = fmtN(avgBa);
+  document.getElementById('avgSleeps').textContent = fmtN(avgSleeps);
+  document.getElementById('avgDays').textContent = avgDays > 0 ? avgDays.toFixed(0) : '—';
+  document.getElementById('avgReviews').textContent = avgReviews > 0 ? avgReviews.toFixed(0) : '—';
+  document.getElementById('avgRevenue').textContent = fmt$(avgRevenue);
+
+  // Revenue potential panel
+  const panel = document.getElementById('compsPotential');
+  if (n >= 1 && avgAdr > 0) {
+    panel.style.display = 'block';
+    const subjectBr = parseFloat(document.getElementById('bedrooms').value) || 0;
+
+    // Scale ADR for subject property's bedroom count vs avg comps BR
+    let suggestedAdr = avgAdr;
+    if (subjectBr > 0 && avgBr > 0) {
+      // Simple scaling: adr scales roughly with sqrt(br ratio)
+      const scale = Math.sqrt(subjectBr / avgBr);
+      suggestedAdr = avgAdr * scale;
+    }
+
+    const occ = avgOcc > 0 ? avgOcc : 60;
+    const annualRev = suggestedAdr * (occ / 100) * 365;
+
+    document.getElementById('cpAdr').textContent = fmt$(suggestedAdr);
+    document.getElementById('cpOcc').textContent = occ.toFixed(0) + '%';
+    document.getElementById('cpRevenue').textContent = fmt$(annualRev);
+    document.getElementById('cpCount').textContent = n;
+
+    // Stash for apply button
+    panel.dataset.suggestedAdr = suggestedAdr.toFixed(2);
+    panel.dataset.suggestedOcc = occ.toFixed(1);
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
+function applyCompsToScenarios() {
+  const panel = document.getElementById('compsPotential');
+  const adr = parseFloat(panel.dataset.suggestedAdr) || 0;
+  const occ = parseFloat(panel.dataset.suggestedOcc) || 60;
+  if (adr <= 0) return;
+
+  // Low / Mid / High ADR = 80% / 100% / 120% of suggested
+  document.getElementById('adrLow').value = Math.round(adr * 0.80);
+  document.getElementById('adrMid').value = Math.round(adr);
+  document.getElementById('adrHigh').value = Math.round(adr * 1.20);
+  // Occupancies: ±10 points around avg, clamped 30-90
+  document.getElementById('occLow').value = Math.max(30, Math.round(occ - 10));
+  document.getElementById('occMid').value = Math.round(occ);
+  document.getElementById('occHigh').value = Math.min(90, Math.round(occ + 10));
+
+  calculate();
+}
+
+// ---- Fetch comparable listings from AirROI /listings/comparables ----
+async function fetchAirROIComparables() {
+  const address = $('address').value.trim();
+  if (!address) { alert('Enter a property address first.'); return; }
+
+  const btn = document.querySelector('button.airroi-btn');
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = '⟳ Loading...'; btn.disabled = true; }
+
+  const bedrooms = parseFloat($('bedrooms').value) || 3;
+  const bathrooms = parseFloat($('bathrooms').value) || 2;
+  const guests = bedrooms * 2;
+
+  try {
+    const res = await fetch('/api/airroi/comparables', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address, bedrooms, bathrooms, guests, currency: 'native' })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(`AirROI error: ${data.error || res.status}`);
+      console.error('[AirROI comps]', data);
+      return;
+    }
+
+    const compsData = (data.comps || []).map(c => ({
+      title: c.title || `Listing ${c.id}`,
+      url: c.url || '',
+      adr: c.adr || 0,
+      occupancy: c.occupancy || 0,
+      br: c.bedrooms || 0,
+      ba: c.bathrooms || 0,
+      sleeps: c.accommodates || 0,
+      daysAvailable: c.days_available || 365,
+      reviews: c.reviews || 0,
+      revenue: c.revenue || 0
+    }));
+
+    window._compsData = compsData;
+    saveComps();
+    renderComps();
+    computeCompAverages();
+    console.log(`[AirROI] Loaded ${compsData.length} comps`);
+  } catch (err) {
+    console.error('[AirROI comps]', err);
+    alert('Connection error fetching AirROI comps.');
+  } finally {
+    if (btn) { btn.textContent = orig; btn.disabled = false; }
+  }
+}
+
+// ---- Fetch ADR/Occupancy/Revenue estimate from AirROI /calculator/estimate ----
+async function fetchAirROIEstimate() {
+  const address = $('address').value.trim();
+  if (!address) { alert('Enter a property address first.'); return; }
+
+  const status = $('airroiStatus');
+  status.textContent = '⟳ Fetching estimate...';
+  status.style.cssText = '';
+
+  const setStatus = (text, state) => {
+    status.textContent = text;
+    if (state === 'error') {
+      status.style.background = 'rgba(239,68,68,0.15)';
+      status.style.color = 'var(--red)';
+      status.style.borderColor = 'var(--red)';
+    } else if (state === 'muted') {
+      status.style.background = 'rgba(148,163,184,0.15)';
+      status.style.color = 'var(--muted)';
+      status.style.borderColor = 'var(--border)';
+    } else {
+      status.style.cssText = '';
+    }
+  };
+
+  try {
+    const bedrooms = parseFloat($('bedrooms').value) || 3;
+    const bathrooms = parseFloat($('bathrooms').value) || 2;
+    const guests = bedrooms * 2;
+
+    const res = await fetch('/api/airroi/estimate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address, bedrooms, bathrooms, guests })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setStatus(data.error || `Error ${res.status}`, 'error');
+      console.error('[AirROI]', data);
+      return;
+    }
+
+    const adr = data.adr || 0;
+    const occ = data.occupancy || 0;
+    const rev = data.revenue || 0;
+
+    if (adr <= 0 && occ <= 0) {
+      setStatus('No estimate data returned', 'muted');
+      return;
+    }
+
+    // Apply estimate to scenario fields: Low 80% / Mid 100% / High 120%
+    if (adr > 0) {
+      $('adrLow').value = Math.round(adr * 0.80);
+      $('adrMid').value = Math.round(adr);
+      $('adrHigh').value = Math.round(adr * 1.20);
+    }
+
+    const occPct = occ > 1 ? occ : Math.round(occ * 100); // handle both 0.65 and 65
+    if (occPct > 0) {
+      $('occLow').value = Math.max(30, Math.round(occPct - 10));
+      $('occMid').value = Math.round(occPct);
+      $('occHigh').value = Math.min(90, Math.round(occPct + 10));
+    }
+
+    const parts = [];
+    if (adr > 0) parts.push(`$${Math.round(adr)} ADR`);
+    if (occPct > 0) parts.push(`${occPct}% occ`);
+    if (rev > 0) parts.push(`$${Math.round(rev).toLocaleString()} rev`);
+    if (data.comp_count > 0) parts.push(`${data.comp_count} comps`);
+    setStatus(`AirROI: ${parts.join(', ')}`, 'ok');
+
+    calculate();
+
+    // Also populate comps table if we got comps back
+    if (data.comps && data.comps.length) {
+      const compsData = data.comps.map(c => ({
+        title: c.title || `Listing ${c.id}`,
+        url: c.url || '',
+        adr: c.adr || 0,
+        occupancy: c.occupancy || 0,
+        br: c.bedrooms || 0,
+        ba: c.bathrooms || 0,
+        sleeps: c.accommodates || 0,
+        daysAvailable: c.days_available || 365,
+        reviews: c.reviews || 0,
+        revenue: c.revenue || 0
+      }));
+      window._compsData = compsData;
+      saveComps();
+      renderComps();
+      computeCompAverages();
+      console.log(`[AirROI] Loaded ${compsData.length} comps into table`);
+    }
+
+    console.log('[AirROI] estimate:', data);
+  } catch (err) {
+    console.error('[AirROI]', err);
+    setStatus('Connection error', 'error');
+  }
+}
+
+// ---- Live fetch from AirDNA (via backend proxy) ----
+async function fetchFromAirDNA() {
+  const address = document.getElementById('address').value.trim();
+  const bedrooms = parseFloat(document.getElementById('bedrooms').value) || 0;
+  const statusEl = document.getElementById('airdnaStatus');
+
+  function setStatus(msg, type = 'info') {
+    statusEl.textContent = msg;
+    statusEl.className = `airdna-status show ${type}`;
+  }
+
+  if (!address) {
+    setStatus('Enter a property address first (e.g. "123 Main St, Austin, TX").', 'error');
+    return;
+  }
+
+  setStatus('🔍 Fetching live comps from AirDNA...', 'info');
+
+  try {
+    // Check backend health first
+    const health = await fetch('/api/health').then(r => r.json()).catch(() => null);
+    if (!health) {
+      setStatus('✗ Backend not running. Start it with: npm run dev', 'error');
+      return;
+    }
+    if (!health.airdna_configured) {
+      setStatus('✗ AIRDNA_API_KEY not set on server. Copy .env.example → .env and add your key, then restart.', 'error');
+      return;
+    }
+
+    const bathrooms = parseFloat(document.getElementById('bathrooms').value) || 0;
+    const body = { address };
+    if (bedrooms > 0) body.bedrooms = bedrooms;
+    if (bathrooms > 0) body.bathrooms = bathrooms;
+
+    const res = await fetch('/api/airdna/comps', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      const detail = data.detail ? JSON.stringify(data.detail).slice(0, 200) : data.error;
+      setStatus(`✗ AirDNA error (${res.status}): ${detail}`, 'error');
+      return;
+    }
+
+    if (!data.comps || data.comps.length === 0) {
+      setStatus('⚠ AirDNA returned no comps for this address. Try a different location or check API response in console.', 'error');
+      console.log('[AirDNA raw response]', data.raw);
+      return;
+    }
+
+    // Load the comps into the app
+    comps = data.comps;
+    renderComps();
+
+    // If the subject estimate is available, log it and optionally use as a sanity check
+    if (data.subject && data.subject.adr) {
+      console.log('[AirDNA subject estimate]', data.subject);
+    }
+
+    setStatus(
+      `✓ Loaded ${data.comps.length} comps from AirDNA. Click "Apply to Scenarios" below to use the averages.`,
+      'success'
+    );
+  } catch (err) {
+    console.error(err);
+    setStatus(`✗ ${err.message}`, 'error');
+  }
+}
+
+// ---- Scrape Airbnb via Playwright backend ----
+async function scrapeAirbnb() {
+  const address = document.getElementById('address').value.trim();
+  const statusEl = document.getElementById('airdnaStatus');
+
+  function setStatus(msg, type = 'info') {
+    statusEl.innerHTML = msg;
+    statusEl.className = `airdna-status show ${type}`;
+  }
+
+  if (!address) {
+    setStatus('Enter a property address first (e.g. "Austin, TX").', 'error');
+    return;
+  }
+
+  // ToS warning confirmation on first use
+  const acknowledged = sessionStorage.getItem('scrapeAcknowledged');
+  if (!acknowledged) {
+    const ok = confirm(
+      '⚠️ Scraping Airbnb may violate their Terms of Service.\n\n' +
+      'This feature is provided for personal research / market analysis only. ' +
+      'You use it at your own risk.\n\n' +
+      'Continue?'
+    );
+    if (!ok) return;
+    sessionStorage.setItem('scrapeAcknowledged', 'true');
+  }
+
+  setStatus('🕷️ Checking scraper status...', 'info');
+
+  try {
+    // Check backend + scraper availability
+    const health = await fetch('/api/health').then(r => r.json()).catch(() => null);
+    if (!health) {
+      setStatus('✗ Backend not running. Start with: <code>npm run dev</code>', 'error');
+      return;
+    }
+    if (!health.scraper_installed) {
+      setStatus(
+        '✗ Playwright not installed. Run in terminal:<br>' +
+        '<code>npm run install-scraper</code><br>' +
+        '(Installs playwright + downloads Chromium browser. One-time, ~200MB.)',
+        'error'
+      );
+      return;
+    }
+
+    setStatus('🕷️ Launching headless browser and scraping Airbnb... (may take 30-60s)', 'info');
+
+    const res = await fetch('/api/scrape/airbnb', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address, count: 12 })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      const detail = data.stderr || data.detail || data.error || 'unknown error';
+      setStatus(`✗ Scrape failed (${res.status}): ${String(detail).slice(0, 300)}`, 'error');
+      console.error('[scrape error]', data);
+      return;
+    }
+
+    if (!data.comps || data.comps.length === 0) {
+      setStatus('⚠ Scraper ran but found no listings. Airbnb selectors may have changed — check server logs.', 'error');
+      return;
+    }
+
+    comps = data.comps;
+    renderComps();
+
+    setStatus(
+      `✓ Scraped ${data.comps.length} Airbnb listings. ` +
+      `Note: occupancy & revenue not available from search page — ` +
+      `fill manually or use ADR averages only. ` +
+      `Click "Apply to Scenarios" below.`,
+      'success'
+    );
+  } catch (err) {
+    console.error(err);
+    setStatus(`✗ ${err.message}`, 'error');
+  }
+}
+
+// ---- Auto-detect AirDNA availability and show fallback panel ----
+async function detectBackendStatus() {
+  try {
+    const health = await fetch('/api/health').then(r => r.json()).catch(() => null);
+    const fallbackPanel = document.getElementById('fallbackPanel');
+    if (!fallbackPanel) return;
+
+    if (!health || !health.airdna_configured) {
+      // Show fallback options (AirDNA unavailable)
+      fallbackPanel.style.display = 'block';
+      // Also dim/hide the AirDNA button since it won't work
+      const btn = document.querySelector('button.airdna-btn');
+      if (btn && !health) {
+        btn.title = 'Backend not running';
+        btn.style.opacity = '0.5';
+      } else if (btn && health && !health.airdna_configured) {
+        btn.title = 'AIRDNA_API_KEY not set in .env';
+        btn.style.opacity = '0.5';
+      }
+    } else {
+      fallbackPanel.style.display = 'none';
+    }
+  } catch (e) { /* silent */ }
+}
+
+// ---- Sample comp generator ----
+function generateSampleComps() {
+  const address = document.getElementById('address').value;
+  const state = parseStateFromAddress(address);
+  const subjectBr = parseFloat(document.getElementById('bedrooms').value) || 3;
+  const basePerBr = (state && STR_ADR_PER_BR[state]) || DEFAULT_ADR_PER_BR;
+
+  // Generate 6 sample comps with variation
+  const samples = [];
+  const nameSuffixes = ['Retreat', 'Getaway', 'Oasis', 'Haven', 'Loft', 'Cottage'];
+  for (let i = 0; i < 6; i++) {
+    const brOffset = [-1, 0, 0, 0, 1, 1][i];
+    const br = Math.max(1, subjectBr + brOffset);
+    const ba = Math.max(1, Math.round((br * 0.8) * 2) / 2);
+    const sleeps = br * 2 + [0, 1, 0, 2, 1, 0][i];
+
+    // ADR variance: ±25% of base
+    const variance = 0.75 + Math.random() * 0.5;
+    const adr = Math.round(basePerBr * br * variance);
+
+    // Occupancy: 45-80%
+    const occ = Math.round(45 + Math.random() * 35);
+
+    // Days available: 300-365 (subtract blocked days)
+    const daysAvail = Math.round(300 + Math.random() * 65);
+
+    // Reviews: 15-250
+    const reviews = Math.round(15 + Math.random() * 235);
+
+    // Annual revenue = adr * days_booked (=days_avail * occ%)
+    const revenue = Math.round(adr * daysAvail * (occ / 100));
+
+    samples.push({
+      source: `Sample ${state || 'US'} ${br}BR ${nameSuffixes[i]}`,
+      adr, occ, br, ba, sleeps, daysAvail, reviews, revenue
+    });
+  }
+
+  comps = samples;
+  renderComps();
+}
+
+// ---- CSV Import ----
+function importCompsCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target.result;
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) {
+      alert('CSV must have a header row and at least one data row.');
+      return;
+    }
+    const header = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/['"]/g, ''));
+
+    // Map common header variants
+    const fieldMap = {
+      source: ['source', 'url', 'name', 'listing', 'title'],
+      adr: ['adr', 'daily rate', 'avg daily rate', 'average daily rate', 'nightly rate', 'price'],
+      occ: ['occ', 'occupancy', 'occupancy rate', 'occ %'],
+      br: ['br', 'bedrooms', 'bed', 'beds'],
+      ba: ['ba', 'baths', 'bathrooms', 'bath'],
+      sleeps: ['sleeps', 'accommodates', 'guests', 'capacity'],
+      daysAvail: ['days avail', 'days available', 'available days', 'nights available', 'availability'],
+      reviews: ['reviews', 'review count', '# reviews', 'num reviews'],
+      revenue: ['revenue', 'annual revenue', 'rev', 'total revenue', 'yearly revenue']
+    };
+    const colIdx = {};
+    Object.keys(fieldMap).forEach(field => {
+      colIdx[field] = header.findIndex(h => fieldMap[field].some(alias => h === alias || h.includes(alias)));
+    });
+
+    const imported = [];
+    for (let i = 1; i < lines.length; i++) {
+      // Simple CSV parse (handles quoted fields with commas)
+      const cells = parseCSVLine(lines[i]);
+      const c = newBlankComp();
+      Object.keys(colIdx).forEach(field => {
+        const ci = colIdx[field];
+        if (ci >= 0 && ci < cells.length) {
+          const raw = cells[ci].replace(/['"]/g, '').trim();
+          if (field === 'source') {
+            c.source = raw;
+          } else {
+            c[field] = parseFloat(raw.replace(/[$,%]/g, '')) || 0;
+          }
+        }
+      });
+      if (c.adr > 0 || c.revenue > 0 || c.source) imported.push(c);
+    }
+
+    if (!imported.length) {
+      alert('No valid rows found. Make sure your CSV has columns like: Source, ADR, Occupancy, Bedrooms, Baths, Sleeps, Days Available, Reviews, Revenue.');
+      return;
+    }
+    comps = imported;
+    renderComps();
+    event.target.value = ''; // reset file input
+  };
+  reader.readAsText(file);
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) {
+      result.push(cur);
+      cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
+// ---- Persistence ----
+function saveComps() {
+  try {
+    localStorage.setItem('strComps', JSON.stringify(comps));
+  } catch (e) { /* ignore */ }
+}
+function loadComps() {
+  try {
+    const raw = localStorage.getItem('strComps');
+    if (raw) {
+      comps = JSON.parse(raw);
+      renderComps();
+    }
+  } catch (e) { /* ignore */ }
+}
+
+// ============================================================
+// Utility formatting
+const $ = (id) => document.getElementById(id);
+const fmt$ = (n) => isFinite(n) ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }) : '—';
+const fmtPct = (n) => isFinite(n) ? (n * 100).toFixed(1) + '%' : '—';
+const num = (id) => parseFloat($(id).value) || 0;
+
+// Standard mortgage payment
+function pmt(rate, nper, pv) {
+  if (rate === 0) return pv / nper;
+  return (pv * rate) / (1 - Math.pow(1 + rate, -nper));
+}
+
+// Defaults for reset
+const DEFAULTS = {
+  purchasePrice: 450000, downPayment: 20, closingPct: 3.5,
+  bedrooms: 3, furnishPerBr: 5000, extraSpaces: 1, extraSpaceCost: 3000, rehab: 0,
+  adrLow: 150, occLow: 50, adrMid: 200, occMid: 60, adrHigh: 275, occHigh: 75,
+  taxRate: 1.1, insurance: 200, hoa: 0, water: 50, gas: 35, electric: 140, wifi: 100,
+  capex: 100, incidentals: 75, maintenance: 100, guesty: 25, pricelabs: 20,
+  permit: 0, cleaning: 0, pmPct: 0, airbnbFee: 3, rate: 7.25, term: 30
+};
+function resetDefaults() {
+  Object.entries(DEFAULTS).forEach(([k, v]) => { if ($(k)) $(k).value = v; });
+  calculate();
+}
+
+function calculate() {
+  // --- Inputs ---
+  const price = num('purchasePrice');
+  const downPct = num('downPayment') / 100;
+  const closingPct = num('closingPct') / 100;
+  const bedrooms = num('bedrooms');
+  const furnishPerBr = num('furnishPerBr');
+  const extraSpaces = num('extraSpaces');
+  const extraSpaceCost = num('extraSpaceCost');
+  const rehab = num('rehab');
+
+  const taxRate = num('taxRate') / 100;
+  const insurance = num('insurance');
+  const hoa = num('hoa');
+  const water = num('water');
+  const gas = num('gas');
+  const electric = num('electric');
+  const wifi = num('wifi');
+  const capex = num('capex');
+  const incidentals = num('incidentals');
+  const maintenance = num('maintenance');
+  const guesty = num('guesty');
+  const pricelabs = num('pricelabs');
+  const permit = num('permit');
+  const cleaning = num('cleaning');
+  const pmPct = num('pmPct') / 100;
+  const airbnbFee = num('airbnbFee') / 100;
+
+  const rate = num('rate') / 100;
+  const term = num('term');
+
+  // --- Investment breakdown ---
+  const downPayment = price * downPct;
+  const closing = price * closingPct;
+  const furnishing = (bedrooms * furnishPerBr) + (extraSpaces * extraSpaceCost);
+  const totalInvested = downPayment + closing + furnishing + rehab;
+
+  const loan = price - downPayment;
+  const monthlyMortgage = pmt(rate / 12, term * 12, loan);
+
+  $('r_downpay').textContent = fmt$(downPayment);
+  $('r_closing').textContent = fmt$(closing);
+  $('r_furnish').textContent = fmt$(furnishing);
+  $('r_rehab').textContent = fmt$(rehab);
+  $('r_total').textContent = fmt$(totalInvested);
+  $('r_loan').textContent = fmt$(loan);
+  $('r_mortgage').textContent = fmt$(monthlyMortgage);
+
+  // --- Fixed monthly opex (not incl. tax, airbnb fee, PM) ---
+  const monthlyTax = price * taxRate / 12;
+  const fixedOpex = insurance + hoa + water + gas + electric + wifi +
+                    capex + incidentals + maintenance + guesty + pricelabs +
+                    permit + cleaning + monthlyTax;
+
+  // --- Scenarios ---
+  const scenarios = [
+    { key: 'low', adr: num('adrLow'), occ: num('occLow') / 100 },
+    { key: 'mid', adr: num('adrMid'), occ: num('occMid') / 100 },
+    { key: 'high', adr: num('adrHigh'), occ: num('occHigh') / 100 },
+  ];
+
+  scenarios.forEach(s => {
+    const annualRev = s.adr * 365 * s.occ;
+    const monthlyRev = annualRev / 12;
+    const variableFees = monthlyRev * (airbnbFee + pmPct);
+    const monthlyOpex = fixedOpex + variableFees;
+    const monthlyNOI = monthlyRev - monthlyOpex;
+    const annualNOI = monthlyNOI * 12;
+    const monthlyCF = monthlyNOI - monthlyMortgage;
+    const annualCF = monthlyCF * 12;
+
+    const capRate = annualNOI / price;
+    const coc = annualCF / totalInvested;
+    const grm = price / annualRev;
+
+    $(`rev_${s.key}`).textContent = fmt$(monthlyRev);
+    $(`rev_${s.key}_a`).textContent = fmt$(annualRev);
+    $(`opex_${s.key}`).textContent = fmt$(monthlyOpex);
+    $(`noi_${s.key}`).textContent = fmt$(monthlyNOI);
+    $(`noi_${s.key}_a`).textContent = fmt$(annualNOI);
+
+    const cfEl = $(`cf_${s.key}`);
+    const cfEl2 = $(`cf_${s.key}_a`);
+    cfEl.textContent = fmt$(monthlyCF);
+    cfEl2.textContent = fmt$(annualCF);
+    cfEl.className = monthlyCF >= 0 ? 'positive' : 'negative';
+    cfEl2.className = annualCF >= 0 ? 'positive' : 'negative';
+
+    const capEl = $(`cap_${s.key}`);
+    capEl.textContent = fmtPct(capRate);
+    capEl.className = capRate >= 0.20 ? 'positive' : (capRate >= 0.08 ? '' : 'negative');
+
+    $(`coc_${s.key}`).textContent = fmtPct(coc);
+    $(`grm_${s.key}`).textContent = isFinite(grm) ? grm.toFixed(1) + 'x' : '—';
+  });
+
+  // --- Target Offer Price Optimizer ---
+  // Cap = (AnnualRev*(1-airbnbFee-pmPct) - FixedOpExNoTax*12 - Price*taxRate) / Price = targetCap
+  // Solve for Price:
+  // Price * (targetCap + taxRate) = AnnualRev*(1-vfee) - FixedOpExNoTax*12
+  // Price = (AnnualRev*(1-vfee) - FixedOpExNoTax*12) / (targetCap + taxRate)
+  const targetCap = 0.20;
+  const fixedOpexNoTax = fixedOpex - monthlyTax; // remove the tax (price-dependent)
+  const vfee = airbnbFee + pmPct;
+
+  function maxOfferForCap(adr, occ) {
+    const annualRev = adr * 365 * occ;
+    const numerator = annualRev * (1 - vfee) - fixedOpexNoTax * 12;
+    return numerator / (targetCap + taxRate);
+  }
+
+  const offerMid = maxOfferForCap(num('adrMid'), num('occMid') / 100);
+  const offerHigh = maxOfferForCap(num('adrHigh'), num('occHigh') / 100);
+  const suggested = Math.min(offerMid, offerHigh);
+
+  $('offer_mid').textContent = fmt$(offerMid);
+  $('offer_high').textContent = fmt$(offerHigh);
+  $('offer_suggested').textContent = (suggested > 0 ? fmt$(suggested) : 'Not feasible');
+  if (suggested <= 0) {
+    $('offer_sub').textContent = 'Revenue too low to achieve 20% cap rate at any price';
+  } else {
+    $('offer_sub').textContent = 'Lower of Mid/High to protect both scenarios';
+  }
+
+  // Verify at suggested
+  if (suggested > 0) {
+    function capAtPrice(adr, occ, p) {
+      const annualRev = adr * 365 * occ;
+      const opexAnnual = fixedOpexNoTax * 12 + p * taxRate + annualRev * vfee;
+      return (annualRev - opexAnnual) / p;
+    }
+    const midCap = capAtPrice(num('adrMid'), num('occMid') / 100, suggested);
+    const highCap = capAtPrice(num('adrHigh'), num('occHigh') / 100, suggested);
+    $('v_mid_cap').textContent = fmtPct(midCap);
+    $('v_high_cap').textContent = fmtPct(highCap);
+    $('v_mid_status').innerHTML = midCap >= 0.199 ? '<span class="tag pass">Pass</span>' : '<span class="tag fail">Fail</span>';
+    $('v_high_status').innerHTML = highCap >= 0.199 ? '<span class="tag pass">Pass</span>' : '<span class="tag fail">Fail</span>';
+
+    // Monthly cash flow at suggested price (mid scenario)
+    const suggestedLoan = suggested * (1 - downPct);
+    const suggestedMortgage = pmt(rate / 12, term * 12, suggestedLoan);
+    const annualRevMid = num('adrMid') * 365 * (num('occMid') / 100);
+    const monthlyRevMid = annualRevMid / 12;
+    const suggestedTax = suggested * taxRate / 12;
+    const monthlyOpexMid = fixedOpexNoTax + suggestedTax + monthlyRevMid * vfee;
+    const monthlyCFMid = monthlyRevMid - monthlyOpexMid - suggestedMortgage;
+    $('v_mid_cf').textContent = fmt$(monthlyCFMid) + (monthlyCFMid >= 0 ? ' ✓' : ' ✗');
+    $('v_mid_cf').className = monthlyCFMid >= 0 ? 'positive' : 'negative';
+  } else {
+    $('v_mid_cap').textContent = '—';
+    $('v_high_cap').textContent = '—';
+    $('v_mid_status').textContent = '—';
+    $('v_high_status').textContent = '—';
+    $('v_mid_cf').textContent = '—';
+  }
+}
+
+// Bind all inputs
+document.querySelectorAll('input[type="number"]').forEach(el => {
+  el.addEventListener('input', calculate);
+});
+
+// Auto-detect tax rate + property details from address
+$('address').addEventListener('blur', onAddressChange);
+$('address').addEventListener('change', onAddressChange);
+
+// ---- Address Autocomplete ----
+(function initAutocomplete() {
+  const input = $('address');
+  const dropdown = $('addressDropdown');
+  let debounceTimer = null;
+  let activeIdx = -1;
+  let items = [];
+
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    const q = input.value.trim();
+    if (q.length < 3) { hideDropdown(); return; }
+    debounceTimer = setTimeout(() => fetchSuggestions(q), 250);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (!dropdown.classList.contains('visible')) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activeIdx = Math.min(activeIdx + 1, items.length - 1);
+      highlightItem();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activeIdx = Math.max(activeIdx - 1, 0);
+      highlightItem();
+    } else if (e.key === 'Enter' && activeIdx >= 0) {
+      e.preventDefault();
+      selectItem(activeIdx);
+    } else if (e.key === 'Escape') {
+      hideDropdown();
+    }
+  });
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.autocomplete-wrapper')) hideDropdown();
+  });
+
+  async function fetchSuggestions(q) {
+    try {
+      const res = await fetch(`/api/autocomplete?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      if (!Array.isArray(data) || !data.length) { hideDropdown(); return; }
+      items = data;
+      renderDropdown();
+    } catch (err) {
+      hideDropdown();
+    }
+  }
+
+  function renderDropdown() {
+    activeIdx = -1;
+    dropdown.innerHTML = items.map((item, i) => {
+      const secondary = item.subName ? `<span class="ac-secondary">${item.subName}</span>` : '';
+      return `<div class="autocomplete-item" data-idx="${i}">${item.address}${secondary}</div>`;
+    }).join('');
+    dropdown.classList.add('visible');
+
+    dropdown.querySelectorAll('.autocomplete-item').forEach(el => {
+      el.addEventListener('mouseenter', () => {
+        activeIdx = parseInt(el.dataset.idx);
+        highlightItem();
+      });
+      el.addEventListener('click', () => selectItem(parseInt(el.dataset.idx)));
+    });
+  }
+
+  function highlightItem() {
+    dropdown.querySelectorAll('.autocomplete-item').forEach((el, i) => {
+      el.classList.toggle('active', i === activeIdx);
+    });
+  }
+
+  function selectItem(idx) {
+    const item = items[idx];
+    if (!item) return;
+    input.value = item.address;
+    hideDropdown();
+    onAddressChange();
+  }
+
+  function hideDropdown() {
+    dropdown.classList.remove('visible');
+    dropdown.innerHTML = '';
+    items = [];
+    activeIdx = -1;
+  }
+})();
+
+// Clear auto-badges when user manually edits the value
+function markManual(inputId, badgeId) {
+  $(inputId).addEventListener('input', () => {
+    const badge = $(badgeId);
+    if (badge.textContent.startsWith('Auto:')) {
+      badge.textContent = 'Manual';
+      badge.style.background = 'rgba(148, 163, 184, 0.15)';
+      badge.style.color = 'var(--muted)';
+      badge.style.borderColor = 'var(--border)';
+    }
+  });
+}
+markManual('taxRate', 'taxSource');
+markManual('bedrooms', 'bedroomsSource');
+markManual('bathrooms', 'bathroomsSource');
+
+// ============================================================
+// SAVE ANALYSIS — Modal, Excel builder, Disk + Google Drive
+// ============================================================
+
+// Show current origin in settings
+document.addEventListener('DOMContentLoaded', () => {
+  const el = $('currentOrigin');
+  if (el) el.textContent = window.location.origin;
+  // Restore saved client id
+  const saved = localStorage.getItem('gClientId');
+  if (saved && $('gClientId')) $('gClientId').value = saved;
+});
+
+function openSaveModal() {
+  // Suggest filename from address if present
+  const addr = $('address').value.trim();
+  if (addr) {
+    $('saveFilename').value = `STR Analysis - ${addr}.xlsx`;
+  }
+  $('saveModal').classList.add('open');
+  $('saveStatus').className = 'save-status';
+  $('saveStatus').textContent = '';
+}
+function closeSaveModal(e) {
+  if (e && e.target.id !== 'saveModal') return;
+  $('saveModal').classList.remove('open');
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeSaveModal();
+});
+
+function showStatus(msg, type = 'info') {
+  const el = $('saveStatus');
+  el.textContent = msg;
+  el.className = `save-status show ${type}`;
+}
+
+function saveClientId() {
+  const id = $('gClientId').value.trim();
+  localStorage.setItem('gClientId', id);
+  showStatus('Client ID saved.', 'success');
+}
+
+// ---------- Excel builder (SheetJS) ----------
+function readNum(id) { return parseFloat($(id).value) || 0; }
+function readText(id) { return $(id).value || ''; }
+
+function buildWorkbook() {
+  // Collect all values from the DOM (post-calculation)
+  const price = readNum('purchasePrice');
+  const downPct = readNum('downPayment') / 100;
+  const closingPct = readNum('closingPct') / 100;
+
+  const aoa = [];
+  const push = (...row) => aoa.push(row);
+
+  push('STR INVESTMENT ANALYSIS');
+  push('Generated', new Date().toLocaleString());
+  push('Property Address', readText('address'));
+  push();
+
+  push('INVESTMENT DETAILS');
+  push('Purchase Price', price);
+  push('Down Payment %', downPct);
+  push('Down Payment', price * downPct);
+  push('Closing Costs %', closingPct);
+  push('Closing Costs', price * closingPct);
+  push('# Bedrooms', readNum('bedrooms'));
+  push('# Bathrooms', readNum('bathrooms'));
+  push('Furnishing / BR', readNum('furnishPerBr'));
+  push('Extra Common Spaces', readNum('extraSpaces'));
+  push('Cost / Extra Space', readNum('extraSpaceCost'));
+  push('Rehab', readNum('rehab'));
+  push('Total Money Invested', parseCurrency($('r_total').textContent));
+  push('Loan Amount', parseCurrency($('r_loan').textContent));
+  push('Monthly Mortgage (P&I)', parseCurrency($('r_mortgage').textContent));
+  push();
+
+  push('REVENUE SCENARIOS');
+  push('', 'Low', 'Mid', 'High');
+  push('ADR', readNum('adrLow'), readNum('adrMid'), readNum('adrHigh'));
+  push('Occupancy %', readNum('occLow') / 100, readNum('occMid') / 100, readNum('occHigh') / 100);
+  push('Monthly Revenue',
+    parseCurrency($('rev_low').textContent),
+    parseCurrency($('rev_mid').textContent),
+    parseCurrency($('rev_high').textContent));
+  push('Annual Revenue',
+    parseCurrency($('rev_low_a').textContent),
+    parseCurrency($('rev_mid_a').textContent),
+    parseCurrency($('rev_high_a').textContent));
+  push();
+
+  push('MONTHLY OPERATING EXPENSES');
+  push('Property Tax (annual %)', readNum('taxRate') / 100);
+  push('Monthly Property Tax', price * (readNum('taxRate') / 100) / 12);
+  push('Insurance', readNum('insurance'));
+  push('HOA', readNum('hoa'));
+  push('Water', readNum('water'));
+  push('Gas', readNum('gas'));
+  push('Electric', readNum('electric'));
+  push('WiFi + TV/Cable', readNum('wifi'));
+  push('CAPEX Reserve', readNum('capex'));
+  push('Incidentals', readNum('incidentals'));
+  push('Maintenance', readNum('maintenance'));
+  push('Guesty/Hospitable', readNum('guesty'));
+  push('PriceLabs', readNum('pricelabs'));
+  push('City Permit', readNum('permit'));
+  push('Cleaning', readNum('cleaning'));
+  push('Property Manager %', readNum('pmPct') / 100);
+  push('Airbnb Service Fee %', readNum('airbnbFee') / 100);
+  push();
+
+  push('NOI & CASH FLOW');
+  push('', 'Low', 'Mid', 'High');
+  push('Monthly OpEx',
+    parseCurrency($('opex_low').textContent),
+    parseCurrency($('opex_mid').textContent),
+    parseCurrency($('opex_high').textContent));
+  push('Monthly NOI (pre-mortgage)',
+    parseCurrency($('noi_low').textContent),
+    parseCurrency($('noi_mid').textContent),
+    parseCurrency($('noi_high').textContent));
+  push('Annual NOI',
+    parseCurrency($('noi_low_a').textContent),
+    parseCurrency($('noi_mid_a').textContent),
+    parseCurrency($('noi_high_a').textContent));
+  push('Monthly Cash Flow',
+    parseCurrency($('cf_low').textContent),
+    parseCurrency($('cf_mid').textContent),
+    parseCurrency($('cf_high').textContent));
+  push('Annual Cash Flow',
+    parseCurrency($('cf_low_a').textContent),
+    parseCurrency($('cf_mid_a').textContent),
+    parseCurrency($('cf_high_a').textContent));
+  push();
+
+  push('KEY METRICS');
+  push('', 'Low', 'Mid', 'High');
+  push('Cap Rate',
+    parsePct($('cap_low').textContent),
+    parsePct($('cap_mid').textContent),
+    parsePct($('cap_high').textContent));
+  push('Cash-on-Cash Return',
+    parsePct($('coc_low').textContent),
+    parsePct($('coc_mid').textContent),
+    parsePct($('coc_high').textContent));
+  push('Gross Rent Multiplier',
+    $('grm_low').textContent,
+    $('grm_mid').textContent,
+    $('grm_high').textContent);
+  push();
+
+  push('MORTGAGE PARAMETERS');
+  push('Interest Rate', readNum('rate') / 100);
+  push('Term (years)', readNum('term'));
+  push();
+
+  // --- Comparable Properties ---
+  const activeComps = comps.filter(c => c.adr > 0 || c.revenue > 0);
+  if (activeComps.length > 0) {
+    push('COMPARABLE PROPERTIES');
+    push('Source', 'ADR', 'Occupancy %', 'Bedrooms', 'Baths', 'Sleeps', 'Days Avail', 'Reviews', 'Annual Revenue');
+    activeComps.forEach(c => {
+      push(c.source, c.adr, c.occ / 100, c.br, c.ba, c.sleeps, c.daysAvail, c.reviews, c.revenue);
+    });
+    // Averages
+    const avg = (key) => {
+      const vals = activeComps.map(c => c[key]).filter(v => v > 0);
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+    };
+    push('AVERAGE',
+      avg('adr'),
+      avg('occ') / 100,
+      avg('br'),
+      avg('ba'),
+      avg('sleeps'),
+      avg('daysAvail'),
+      avg('reviews'),
+      avg('revenue')
+    );
+    push();
+    push('REVENUE POTENTIAL (FROM COMPS)');
+    push('Suggested ADR', parseCurrency($('cpAdr').textContent));
+    push('Est. Occupancy', parsePct($('cpOcc').textContent));
+    push('Annual Revenue', parseCurrency($('cpRevenue').textContent));
+    push();
+  }
+
+  push('🎯 TARGET OFFER PRICE (Cap Rate ≥ 20%)');
+  push('Max Offer @ 20% (Mid)', parseCurrency($('offer_mid').textContent));
+  push('Max Offer @ 20% (High)', parseCurrency($('offer_high').textContent));
+  push('SUGGESTED MAX OFFER', parseCurrency($('offer_suggested').textContent));
+  push('Mid Cap Rate at Suggested', parsePct($('v_mid_cap').textContent));
+  push('High Cap Rate at Suggested', parsePct($('v_high_cap').textContent));
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  // Column widths
+  ws['!cols'] = [{ wch: 38 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
+
+  // Basic formatting: number formats on currency rows
+  // Identify currency cells (col B where label contains $-ish terms)
+  const currencyLabels = /Price|Costs?|Payment|Invested|Loan|Mortgage|Revenue|NOI|Cash Flow|OpEx|Insurance|HOA|Water|Gas|Electric|WiFi|CAPEX|Incidentals|Maintenance|Guesty|PriceLabs|Permit|Cleaning|Offer|Tax$|Furnishing|Rehab|Extra/;
+  const pctLabels = /%|Rate$|Occupancy|Cap Rate|Return/;
+
+  for (let r = 0; r < aoa.length; r++) {
+    const label = aoa[r][0];
+    if (typeof label !== 'string') continue;
+    for (let c = 1; c < 4; c++) {
+      const cellRef = XLSX.utils.encode_cell({ r, c });
+      if (!ws[cellRef]) continue;
+      if (pctLabels.test(label) && typeof ws[cellRef].v === 'number') {
+        ws[cellRef].z = '0.0%';
+      } else if (currencyLabels.test(label) && typeof ws[cellRef].v === 'number') {
+        ws[cellRef].z = '$#,##0';
+      }
+    }
+  }
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'STR Analysis');
+  return wb;
+}
+
+function parseCurrency(str) {
+  if (!str || str === '—') return 0;
+  const n = parseFloat(str.replace(/[$,]/g, ''));
+  return isNaN(n) ? 0 : n;
+}
+function parsePct(str) {
+  if (!str || str === '—') return 0;
+  const n = parseFloat(str.replace('%', '')) / 100;
+  return isNaN(n) ? 0 : n;
+}
+
+function workbookToBlob(wb) {
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  return new Blob([buf], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
+}
+
+// ---------- Save to Disk ----------
+async function saveToDisk() {
+  try {
+    const wb = buildWorkbook();
+    const blob = workbookToBlob(wb);
+    const filename = $('saveFilename').value.trim() || 'STR Analysis.xlsx';
+
+    // Try File System Access API (Chrome, Edge) for native "Save As" dialog
+    if ('showSaveFilePicker' in window) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: filename,
+          types: [{
+            description: 'Excel Workbook',
+            accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] }
+          }]
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        showStatus(`✓ Saved to ${handle.name}`, 'success');
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          showStatus('Save cancelled.', 'info');
+          return;
+        }
+        // Fall through to download fallback
+      }
+    }
+
+    // Fallback: trigger standard download
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showStatus(`✓ Downloaded ${filename}`, 'success');
+  } catch (err) {
+    console.error(err);
+    showStatus(`✗ Error: ${err.message}`, 'error');
+  }
+}
+
+// ---------- Save to Google Drive ----------
+let gTokenClient = null;
+let gAccessToken = null;
+
+function ensureGoogleClient() {
+  const clientId = localStorage.getItem('gClientId');
+  if (!clientId) {
+    throw new Error('Google Client ID not configured. Open ⚙️ Google Drive Settings below to add one.');
+  }
+  if (!window.google || !google.accounts || !google.accounts.oauth2) {
+    throw new Error('Google Identity Services not loaded. Check your internet connection.');
+  }
+  if (!gTokenClient || gTokenClient._clientId !== clientId) {
+    gTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: (tokenResponse) => {
+        gAccessToken = tokenResponse.access_token;
+      },
+    });
+    gTokenClient._clientId = clientId;
+  }
+}
+
+function requestGoogleToken() {
+  return new Promise((resolve, reject) => {
+    try {
+      ensureGoogleClient();
+    } catch (err) { return reject(err); }
+    gTokenClient.callback = (resp) => {
+      if (resp.error) return reject(new Error(resp.error));
+      gAccessToken = resp.access_token;
+      resolve(resp.access_token);
+    };
+    gTokenClient.requestAccessToken({ prompt: gAccessToken ? '' : 'consent' });
+  });
+}
+
+async function saveToGoogleDrive() {
+  try {
+    showStatus('Authenticating with Google...', 'info');
+    const token = await requestGoogleToken();
+
+    const wb = buildWorkbook();
+    const blob = workbookToBlob(wb);
+    const filename = $('saveFilename').value.trim() || 'STR Analysis.xlsx';
+
+    showStatus('Uploading to Google Drive...', 'info');
+
+    const metadata = {
+      name: filename,
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    };
+
+    const boundary = '-------str-analyzer-' + Date.now();
+    const delimiter = `\r\n--${boundary}\r\n`;
+    const closeDelim = `\r\n--${boundary}--`;
+
+    const blobBuffer = await blob.arrayBuffer();
+    const base64 = btoa(
+      new Uint8Array(blobBuffer).reduce((acc, b) => acc + String.fromCharCode(b), '')
+    );
+
+    const body =
+      delimiter +
+      'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+      JSON.stringify(metadata) +
+      delimiter +
+      'Content-Type: ' + metadata.mimeType + '\r\n' +
+      'Content-Transfer-Encoding: base64\r\n\r\n' +
+      base64 +
+      closeDelim;
+
+    const res = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': 'multipart/related; boundary=' + boundary
+        },
+        body: body
+      }
+    );
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Drive API error (${res.status}): ${errText}`);
+    }
+    const data = await res.json();
+    const link = data.webViewLink || '#';
+    const el = $('saveStatus');
+    el.className = 'save-status show success';
+    el.innerHTML = `✓ Uploaded as "<strong>${data.name}</strong>". <a href="${link}" target="_blank" style="color:inherit; text-decoration:underline;">Open in Drive →</a>`;
+  } catch (err) {
+    console.error(err);
+    showStatus(`✗ ${err.message}`, 'error');
+  }
+}
+
+// Detect AirDNA/scraper availability and show fallback panel if needed
+detectBackendStatus();
+
+// Load saved comps (or start with one empty row)
+loadComps();
+if (comps.length === 0) {
+  comps = [newBlankComp()];
+  renderComps();
+}
+
+// Initial calc
+calculate();
+
+// ============================================================
+// TAB SWITCHER
+// ============================================================
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${name}`));
+  localStorage.setItem('activeTab', name);
+  if (name === 'ltr') {
+    ltrCalc();
+    // Lazy-fetch prime rate once
+    if (!window._primeRateFetched) {
+      window._primeRateFetched = true;
+      ltrFetchPrimeRate();
+    }
+  }
+}
+// Restore last tab
+(function restoreTab() {
+  const saved = localStorage.getItem('activeTab');
+  if (saved === 'ltr') switchTab('ltr');
+})();
+
+// ============================================================
+// LTR — Multi-Family Long-Term Rental Analysis
+// ============================================================
+
+const LTR_IDS = [
+  'ltr_address','ltr_units','ltr_bedrooms','ltr_bathrooms','ltr_yearBuilt','ltr_price',
+  'ltr_downPct','ltr_loanType','ltr_rate','ltr_term','ltr_closingCosts','ltr_primeRate',
+  'ltr_rentPerUnit','ltr_otherIncome','ltr_vacancy','ltr_rentGrowth',
+  'ltr_taxRate','ltr_insurance','ltr_maintPct','ltr_capexPct','ltr_pmPct',
+  'ltr_utilities','ltr_otherOpex','ltr_appreciation'
+];
+
+function ltrNum(id) { return parseFloat($(id)?.value) || 0; }
+function ltrInt(id) { return parseInt($(id)?.value) || 0; }
+
+function resetLTRDefaults() {
+  $('ltr_units').value = 4;
+  $('ltr_bedrooms').value = 2;
+  $('ltr_bathrooms').value = 1;
+  $('ltr_yearBuilt').value = 1980;
+  $('ltr_price').value = 750000;
+  $('ltr_downPct').value = 35;
+  $('ltr_loanType').value = 'auto';
+  $('ltr_rate').value = 7.25;
+  $('ltr_term').value = 30;
+  $('ltr_closingCosts').value = 15000;
+  $('ltr_rentPerUnit').value = 1400;
+  $('ltr_otherIncome').value = 25;
+  $('ltr_vacancy').value = 6;
+  $('ltr_rentGrowth').value = 3;
+  $('ltr_taxRate').value = 1.1;
+  $('ltr_insurance').value = 45;
+  $('ltr_maintPct').value = 8;
+  $('ltr_capexPct').value = 5;
+  $('ltr_pmPct').value = 8;
+  $('ltr_utilities').value = 50;
+  $('ltr_otherOpex').value = 150;
+  $('ltr_appreciation').value = 3;
+  ltrCalc();
+}
+
+// --- Mortgage helpers ---
+function mortgagePI(principal, annualRate, years) {
+  if (principal <= 0 || years <= 0) return 0;
+  const r = (annualRate / 100) / 12;
+  const n = years * 12;
+  if (r === 0) return principal / n;
+  return principal * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+}
+
+function mortgageBalance(principal, annualRate, years, monthsElapsed) {
+  if (principal <= 0) return 0;
+  const r = (annualRate / 100) / 12;
+  const n = years * 12;
+  const pmt = mortgagePI(principal, annualRate, years);
+  if (r === 0) return Math.max(0, principal - pmt * monthsElapsed);
+  return principal * Math.pow(1 + r, monthsElapsed) - pmt * ((Math.pow(1 + r, monthsElapsed) - 1) / r);
+}
+
+function ltrFmt$(v, dec = 0) {
+  if (!isFinite(v)) return '—';
+  const sign = v < 0 ? '-' : '';
+  const abs = Math.abs(v);
+  return `${sign}$${abs.toLocaleString('en-US', { maximumFractionDigits: dec, minimumFractionDigits: dec })}`;
+}
+function ltrFmtPct(v, dec = 2) {
+  if (!isFinite(v)) return '—';
+  return `${v.toFixed(dec)}%`;
+}
+
+// --- Main calculation ---
+function ltrCalc() {
+  const units = ltrInt('ltr_units') || 1;
+  const price = ltrNum('ltr_price');
+  const downPct = ltrNum('ltr_downPct') / 100;
+  const down = price * downPct;
+  const loan = price - down;
+  const closingCosts = ltrNum('ltr_closingCosts');
+
+  // Auto loan type (commercial >4 units)
+  const loanTypeSel = $('ltr_loanType').value;
+  const isCommercial = loanTypeSel === 'commercial' || (loanTypeSel === 'auto' && units > 4);
+  const term = ltrNum('ltr_term') || (isCommercial ? 25 : 30);
+  if (loanTypeSel === 'auto') {
+    // suggest term if user hasn't changed it recently — only set badge
+    $('ltr_term').placeholder = isCommercial ? '25' : '30';
+  }
+  $('ltr_loanTypeBadge').textContent = isCommercial ? ' — Commercial' : ' — Residential';
+  $('ltr_loanTypeBadge').style.color = isCommercial ? 'var(--yellow)' : 'var(--green)';
+
+  const rate = ltrNum('ltr_rate');
+
+  // Income
+  const rentPerUnit = ltrNum('ltr_rentPerUnit');
+  const otherIncome = ltrNum('ltr_otherIncome');
+  const vacancyRate = ltrNum('ltr_vacancy') / 100;
+  const gprMonthly = (rentPerUnit + otherIncome) * units; // Gross Potential Rent
+  const gprAnnual = gprMonthly * 12;
+  const vacancyLoss = gprAnnual * vacancyRate;
+  const egi = gprAnnual - vacancyLoss;                    // Effective Gross Income
+
+  // OpEx
+  const taxAnnual = price * (ltrNum('ltr_taxRate') / 100);
+  const insuranceAnnual = ltrNum('ltr_insurance') * units * 12;
+  const maintAnnual = egi * (ltrNum('ltr_maintPct') / 100);
+  const capexAnnual = egi * (ltrNum('ltr_capexPct') / 100);
+  const pmAnnual = egi * (ltrNum('ltr_pmPct') / 100);
+  const utilitiesAnnual = ltrNum('ltr_utilities') * units * 12;
+  const otherOpexAnnual = ltrNum('ltr_otherOpex') * 12;
+  const totalOpex = taxAnnual + insuranceAnnual + maintAnnual + capexAnnual + pmAnnual + utilitiesAnnual + otherOpexAnnual;
+  const monthlyOpex = totalOpex / 12;
+
+  // NOI
+  const noi = egi - totalOpex;
+
+  // Mortgage (P&I only; taxes/ins in OpEx)
+  const monthlyPI = mortgagePI(loan, rate, term);
+  const annualDS = monthlyPI * 12;
+
+  // Cash flow
+  const annualCF = noi - annualDS;
+  const monthlyCF = annualCF / 12;
+
+  // Cap rate (on price)
+  const capRate = price > 0 ? (noi / price) * 100 : 0;
+
+  // CoC
+  const cashIn = down + closingCosts;
+  const coc = cashIn > 0 ? (annualCF / cashIn) * 100 : 0;
+
+  // DSCR
+  const dscr = annualDS > 0 ? noi / annualDS : 0;
+
+  // Target price at 15% cap
+  const TARGET_CAP = 0.15;
+  const targetPrice = noi > 0 ? noi / TARGET_CAP : 0;
+  const priceDelta = price > 0 ? ((targetPrice - price) / price) * 100 : 0;
+
+  // 5yr ROI (cash flow + principal paydown + appreciation - exit costs skipped for simplicity)
+  const years = 5;
+  const appreciation = ltrNum('ltr_appreciation') / 100;
+  let cumCF = 0;
+  const rentGrowth = ltrNum('ltr_rentGrowth') / 100;
+  for (let y = 1; y <= years; y++) {
+    const yrEgi = egi * Math.pow(1 + rentGrowth, y - 1);
+    const yrOpex = totalOpex * Math.pow(1.02, y - 1); // assume 2% opex growth
+    const yrNoi = yrEgi - yrOpex;
+    cumCF += (yrNoi - annualDS);
+  }
+  const balEnd = mortgageBalance(loan, rate, term, years * 12);
+  const principalPaid = loan - balEnd;
+  const futureValue = price * Math.pow(1 + appreciation, years);
+  const appreciationGain = futureValue - price;
+  const totalReturn = cumCF + principalPaid + appreciationGain;
+  const roiPct = cashIn > 0 ? (totalReturn / cashIn) * 100 : 0;
+
+  // --- Write to DOM ---
+  $('ltr_targetPrice').textContent = ltrFmt$(targetPrice);
+  const deltaLbl = priceDelta >= 0
+    ? `Asking is ${priceDelta.toFixed(1)}% below target — 👍 overpriced` // target > asking
+    : `Asking is ${Math.abs(priceDelta).toFixed(1)}% above target — negotiate down`;
+  // Actually: if targetPrice > price, target is higher than asking → great deal
+  $('ltr_targetPriceDelta').textContent = targetPrice > price
+    ? `✅ Asking (${ltrFmt$(price)}) is BELOW target — strong deal`
+    : `⚠️ Asking (${ltrFmt$(price)}) is ABOVE target — offer down to $${Math.round(targetPrice).toLocaleString()}`;
+
+  setKpi('ltr_capRate', ltrFmtPct(capRate), capRate >= 15 ? 'good' : capRate >= 8 ? 'warn' : 'bad');
+  setKpi('ltr_coc', ltrFmtPct(coc), coc >= 10 ? 'good' : coc >= 5 ? 'warn' : 'bad');
+  setKpi('ltr_roi', ltrFmtPct(roiPct), roiPct >= 50 ? 'good' : roiPct >= 25 ? 'warn' : 'bad');
+  setKpi('ltr_monthlyRent', ltrFmt$(gprMonthly));
+  setKpi('ltr_egi', ltrFmt$(egi));
+  setKpi('ltr_noi', ltrFmt$(noi), noi > 0 ? 'good' : 'bad');
+  setKpi('ltr_monthlyOpex', ltrFmt$(monthlyOpex));
+  setKpi('ltr_monthlyMortgage', ltrFmt$(monthlyPI));
+  setKpi('ltr_monthlyCF', ltrFmt$(monthlyCF), monthlyCF > 0 ? 'good' : 'bad');
+  setKpi('ltr_annualCF', ltrFmt$(annualCF), annualCF > 0 ? 'good' : 'bad');
+  setKpi('ltr_dscr', dscr.toFixed(2), dscr >= 1.25 ? 'good' : dscr >= 1.0 ? 'warn' : 'bad');
+  setKpi('ltr_cashNeeded', ltrFmt$(cashIn));
+
+  // OpEx breakdown
+  const opexTable = $('ltr_opexBreakdown');
+  const gprMo = gprMonthly;
+  const rows = [
+    ['Property Tax', taxAnnual / 12],
+    ['Insurance', insuranceAnnual / 12],
+    ['Maintenance', maintAnnual / 12],
+    ['CapEx Reserves', capexAnnual / 12],
+    ['Property Mgmt', pmAnnual / 12],
+    ['Utilities (owner)', utilitiesAnnual / 12],
+    ['HOA / Other', otherOpexAnnual / 12],
+    ['Vacancy loss', vacancyLoss / 12]
+  ];
+  opexTable.innerHTML = `<tr><th>Line Item</th><th style="text-align:right;">Monthly $</th><th style="text-align:right;">% of GPR</th></tr>` +
+    rows.map(([k, v]) => `<tr><td>${k}</td><td style="text-align:right;">${ltrFmt$(v)}</td><td style="text-align:right;">${gprMo > 0 ? ((v / gprMo) * 100).toFixed(1) : '0.0'}%</td></tr>`).join('') +
+    `<tr style="font-weight:600; background:var(--panel-2);"><td>Total OpEx + Vacancy</td><td style="text-align:right;">${ltrFmt$(monthlyOpex + vacancyLoss / 12)}</td><td style="text-align:right;">${gprMo > 0 ? (((monthlyOpex + vacancyLoss / 12) / gprMo) * 100).toFixed(1) : '0.0'}%</td></tr>`;
+}
+
+function setKpi(id, text, cls) {
+  const el = $(id);
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'val' + (cls ? ' ' + cls : '');
+}
+
+// Wire inputs → recalc
+LTR_IDS.forEach(id => {
+  const el = $(id);
+  if (el) el.addEventListener('input', ltrCalc);
+});
+// Also listen for change on select
+$('ltr_loanType')?.addEventListener('change', ltrCalc);
+
+// Auto-set LTR tax rate from address state
+$('ltr_address')?.addEventListener('blur', () => {
+  const state = parseStateFromAddress($('ltr_address').value);
+  if (state && STATE_TAX_RATES[state]) {
+    $('ltr_taxRate').value = STATE_TAX_RATES[state];
+    ltrCalc();
+  }
+});
+
+// --- Autocomplete for LTR address (reuse /api/autocomplete) ---
+(function initLtrAutocomplete() {
+  const input = $('ltr_address');
+  const dropdown = $('ltr_addressDropdown');
+  if (!input || !dropdown) return;
+  let debounceTimer = null;
+  let activeIdx = -1;
+  let items = [];
+
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    const q = input.value.trim();
+    if (q.length < 3) { hide(); return; }
+    debounceTimer = setTimeout(() => fetchSug(q), 250);
+  });
+  input.addEventListener('keydown', (e) => {
+    if (!dropdown.classList.contains('visible')) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx = Math.min(activeIdx + 1, items.length - 1); hl(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); hl(); }
+    else if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); sel(activeIdx); }
+    else if (e.key === 'Escape') hide();
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#tab-ltr .autocomplete-wrapper')) hide();
+  });
+  async function fetchSug(q) {
+    try {
+      const r = await fetch(`/api/autocomplete?q=${encodeURIComponent(q)}`);
+      const d = await r.json();
+      if (!Array.isArray(d) || !d.length) { hide(); return; }
+      items = d; render();
+    } catch { hide(); }
+  }
+  function render() {
+    activeIdx = -1;
+    dropdown.innerHTML = items.map((it, i) => `<div class="autocomplete-item" data-idx="${i}">${it.address}</div>`).join('');
+    dropdown.classList.add('visible');
+    dropdown.querySelectorAll('.autocomplete-item').forEach(el => {
+      el.addEventListener('mouseenter', () => { activeIdx = parseInt(el.dataset.idx); hl(); });
+      el.addEventListener('click', () => sel(parseInt(el.dataset.idx)));
+    });
+  }
+  function hl() {
+    dropdown.querySelectorAll('.autocomplete-item').forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+  }
+  function sel(i) {
+    const it = items[i]; if (!it) return;
+    input.value = it.address;
+    hide();
+    input.dispatchEvent(new Event('blur'));
+  }
+  function hide() {
+    dropdown.classList.remove('visible');
+    dropdown.innerHTML = '';
+    items = []; activeIdx = -1;
+  }
+})();
+
+// ---- Prime Rate ----
+async function ltrFetchPrimeRate() {
+  try {
+    const r = await fetch('/api/ltr/prime-rate');
+    const d = await r.json();
+    if (d.rate) {
+      $('ltr_primeRate').value = Number(d.rate).toFixed(2);
+      $('ltr_primeAsOf').textContent = d.asOf ? `(${d.source}, ${d.asOf})` : `(${d.source})`;
+      // If commercial auto-mode, suggest rate = prime + 2%
+      const units = ltrInt('ltr_units');
+      const sel = $('ltr_loanType').value;
+      const isCommercial = sel === 'commercial' || (sel === 'auto' && units > 4);
+      if (isCommercial) {
+        const suggested = (Number(d.rate) + 2.0).toFixed(2);
+        $('ltr_rate').value = suggested;
+        $('ltr_rateSource').textContent = `(Prime + 2% = ${suggested}%)`;
+      }
+      ltrCalc();
+    }
+  } catch (e) {
+    console.warn('prime rate fetch failed', e);
+  }
+}
+
+// ---- Auto-fetch property info (RentCast) ----
+async function ltrAutoFetch() {
+  const address = $('ltr_address').value.trim();
+  if (!address) { alert('Enter an address first'); return; }
+  const status = $('ltr_fetchStatus');
+  status.textContent = '⏳ Fetching property details from RentCast...';
+  try {
+    const r = await fetch('/api/rentcast/property', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address })
+    });
+    const d = await r.json();
+    if (r.ok) {
+      if (d.bedrooms) $('ltr_bedrooms').value = d.bedrooms;
+      if (d.bathrooms) $('ltr_bathrooms').value = d.bathrooms;
+      if (d.yearBuilt) $('ltr_yearBuilt').value = d.yearBuilt;
+      if (d.lastSalePrice && d.lastSalePrice > 10000) $('ltr_price').value = d.lastSalePrice;
+      status.textContent = `✓ RentCast: ${d.bedrooms || '?'}BR/${d.bathrooms || '?'}BA · ${d.propertyType || 'unknown type'} · built ${d.yearBuilt || '?'}`;
+      status.style.color = 'var(--green)';
+      ltrCalc();
+    } else {
+      status.textContent = `⚠ RentCast: ${d.error || 'not found'}`;
+      status.style.color = 'var(--yellow)';
+    }
+  } catch (e) {
+    status.textContent = '❌ ' + e.message;
+    status.style.color = 'var(--red)';
+  }
+}
+
+// ---- Rent Estimate ----
+async function ltrFetchRent() {
+  const address = $('ltr_address').value.trim();
+  if (!address) { alert('Enter an address first'); return; }
+  const container = $('ltr_rentResults');
+  container.innerHTML = '⏳ Fetching rent estimates...';
+  try {
+    const r = await fetch('/api/ltr/rent-estimate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        address,
+        bedrooms: ltrInt('ltr_bedrooms'),
+        bathrooms: ltrNum('ltr_bathrooms'),
+        units: ltrInt('ltr_units')
+      })
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      container.innerHTML = `<span style="color:var(--red);">⚠ ${d.error || 'Failed'}</span>`;
+      return;
+    }
+    $('ltr_rentPerUnit').value = d.perUnit;
+    $('ltr_rentSources').textContent = `(${d.sources.join(', ')})`;
+    let html = `<div style="margin-bottom:10px;">
+      <b style="color:var(--green);">Blended per-unit rent: ${ltrFmt$(d.perUnit)}/mo</b>
+      · ${d.units} units → <b>${ltrFmt$(d.totalMonthly)}/mo</b> gross, <b>${ltrFmt$(d.totalAnnual)}/yr</b>
+    </div>`;
+    d.estimates.forEach(est => {
+      html += `<div style="margin-top:8px;"><b>${est.source}:</b> ${ltrFmt$(est.perUnit)}/unit (range ${ltrFmt$(est.low)}–${ltrFmt$(est.high)})</div>`;
+      if (est.comparables && est.comparables.length) {
+        html += `<table class="rent-table"><tr><th>Address</th><th>Rent</th><th>BR</th><th>BA</th><th>SqFt</th><th>Dist</th><th>Age</th></tr>`;
+        est.comparables.slice(0, 8).forEach(c => {
+          html += `<tr><td>${c.address || ''}</td><td>${ltrFmt$(c.rent)}</td><td>${c.bedrooms || '—'}</td><td>${c.bathrooms || '—'}</td><td>${(c.sqft || 0).toLocaleString()}</td><td>${(c.distance || 0).toFixed(2)}mi</td><td>${c.daysOld || '—'}d</td></tr>`;
+        });
+        html += `</table>`;
+      }
+    });
+    container.innerHTML = html;
+    ltrCalc();
+  } catch (e) {
+    container.innerHTML = `<span style="color:var(--red);">❌ ${e.message}</span>`;
+  }
+}
+
+// ---- Sales History ----
+async function ltrFetchSales() {
+  const address = $('ltr_address').value.trim();
+  if (!address) { alert('Enter an address first'); return; }
+  const container = $('ltr_salesResults');
+  container.innerHTML = '⏳ Fetching sales history...';
+  try {
+    const r = await fetch('/api/ltr/sales-history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address })
+    });
+    const d = await r.json();
+    if (!d.sales || !d.sales.length) {
+      container.innerHTML = `<span style="color:var(--yellow);">No sales history found. ${d.error || ''}</span>`;
+      return;
+    }
+    if (d.units && !ltrInt('ltr_units')) $('ltr_units').value = d.units;
+    let html = `<div>Property type: <b>${d.propertyType || 'unknown'}</b>`;
+    if (d.units) html += ` · <b>${d.units}</b> units`;
+    if (d.yearBuilt) html += ` · built <b>${d.yearBuilt}</b>`;
+    if (d.sqft) html += ` · <b>${d.sqft.toLocaleString()}</b> sqft`;
+    html += `</div>`;
+    html += `<table class="sales-table"><tr><th>Date</th><th>Event</th><th>Price</th><th>Source</th></tr>`;
+    d.sales.forEach(s => {
+      html += `<tr><td>${s.date || '—'}</td><td>${s.event || ''}</td><td>${ltrFmt$(s.price)}</td><td>${s.source}</td></tr>`;
+    });
+    html += `</table>`;
+    container.innerHTML = html;
+    ltrCalc();
+  } catch (e) {
+    container.innerHTML = `<span style="color:var(--red);">❌ ${e.message}</span>`;
+  }
+}
+
+// ---- Mortgage / Public Records ----
+async function ltrFetchMortgage() {
+  const address = $('ltr_address').value.trim();
+  if (!address) { alert('Enter an address first'); return; }
+  const container = $('ltr_mortgageResults');
+  container.innerHTML = '⏳ Looking up public records...';
+  try {
+    const r = await fetch('/api/ltr/mortgage-record', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address })
+    });
+    const d = await r.json();
+    let html = `<div style="margin-bottom:10px;">State: <b>${d.state || '?'}</b></div>`;
+    if (d.rentcast) {
+      html += `<div class="ltr-results"><b>RentCast public record:</b><br>`;
+      if (d.rentcast.lastSalePrice) html += `Last sale: <b>${ltrFmt$(d.rentcast.lastSalePrice)}</b> (${d.rentcast.lastSaleDate || 'date unknown'})<br>`;
+      if (d.rentcast.assessedValue) html += `Latest assessed value: <b>${ltrFmt$(d.rentcast.assessedValue)}</b><br>`;
+      if (d.rentcast.owner) html += `Owner: <b>${typeof d.rentcast.owner === 'object' ? JSON.stringify(d.rentcast.owner) : d.rentcast.owner}</b><br>`;
+      html += `Owner-occupied: <b>${d.rentcast.ownerOccupied ? 'Yes' : 'No'}</b></div>`;
+    }
+    html += `<div><b>Public record portals (click to search for this property):</b><br>`;
+    d.links.forEach(l => {
+      html += `<a class="link-pill" href="${l.url}" target="_blank" rel="noopener">${l.name} ↗</a>`;
+    });
+    html += `</div>`;
+    html += `<div class="small-note" style="margin-top:10px;">Mortgage records (deeds of trust / satisfactions) are filed with the county recorder. Use the links above to search — it's free but formats vary by county.</div>`;
+    container.innerHTML = html;
+  } catch (e) {
+    container.innerHTML = `<span style="color:var(--red);">❌ ${e.message}</span>`;
+  }
+}
+
+// Initial LTR render
+ltrCalc();
+</script>
+
+</body>
+</html>
