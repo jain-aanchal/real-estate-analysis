@@ -720,6 +720,13 @@
         <h2 style="margin:0; border:none; padding:0;">Property Details</h2>
         <button class="reset" onclick="resetDefaults()">Reset Defaults</button>
       </div>
+      <div class="row"><label>Listing URL <span class="small-note" style="display:inline;">(Redfin/Zillow/Realtor)</span></label>
+        <input type="text" id="listingUrl" placeholder="paste listing URL to auto-fill" style="width:260px; text-align:left;" autocomplete="off" />
+      </div>
+      <div class="row" style="justify-content:flex-end;">
+        <button class="ltr-action-btn" onclick="fetchListing('str')" style="margin:0;">🔗 Pull from Listing</button>
+        <span id="listingStatus" class="small-note" style="margin-left:8px;"></span>
+      </div>
       <div class="row"><label>Property Address <span class="small-note" style="display:inline;">(auto-sets tax)</span></label>
         <div class="autocomplete-wrapper">
           <input type="text" id="address" placeholder="e.g. 123 Main St, Austin, TX 78701" style="width:260px; text-align:left;" autocomplete="off" />
@@ -753,6 +760,35 @@
       <div class="row"><label>Rehab Cost</label>
         <input type="number" id="rehab" value="0" />
       </div>
+    </div>
+
+    <!-- ===== AirDNA Rentalizer PDF Upload ===== -->
+    <div class="card">
+      <div class="flex-between">
+        <h2 style="margin:0; border:none; padding:0;">📑 AirDNA Rentalizer PDF</h2>
+        <span id="airdnaPdfStatus" class="small-note"></span>
+      </div>
+      <p class="small-note" style="margin:6px 0 12px;">Upload an AirDNA Rentalizer / Property Analytics PDF to auto-pull ADR, occupancy, projected revenue, NOI, OpEx, and comps.</p>
+      <input type="file" id="airdnaPdfInput" accept="application/pdf,.pdf" style="display:none" onchange="uploadAirDNAPdf(event)" />
+      <button class="reset airroi-btn" onclick="$('airdnaPdfInput').click()">📤 Upload PDF</button>
+      <button class="reset" onclick="applyAirDNAPdfToScenarios()" id="airdnaPdfApplyBtn" disabled style="margin-left:6px;">Apply to Scenarios →</button>
+
+      <div class="row" style="margin-top:14px;"><label>Avg ADR (from PDF)</label>
+        <input type="number" id="pdfAdr" value="" placeholder="—" readonly style="opacity:0.85;" />
+      </div>
+      <div class="row"><label>Avg Occupancy % (from PDF)</label>
+        <input type="number" id="pdfOccupancy" value="" placeholder="—" readonly style="opacity:0.85;" />
+      </div>
+      <div class="row"><label>Projected Annual Revenue ($)</label>
+        <input type="number" id="pdfRevenue" value="" placeholder="—" readonly style="opacity:0.85;" />
+      </div>
+      <div class="row"><label>NOI (from PDF, annual $)</label>
+        <input type="number" id="pdfNoi" value="" placeholder="—" readonly style="opacity:0.85;" />
+      </div>
+      <div class="row"><label>Operating Expenses (from PDF, annual $)</label>
+        <input type="number" id="pdfOpex" value="" placeholder="—" readonly style="opacity:0.85;" />
+      </div>
+      <div id="pdfCompsContainer" class="small-note" style="margin-top:10px;"></div>
     </div>
 
     <div class="card">
@@ -998,15 +1034,17 @@
           <td id="coc_low"></td><td id="coc_mid"></td><td id="coc_high"></td></tr>
         <tr><td>Gross Rent Multiplier</td>
           <td id="grm_low"></td><td id="grm_mid"></td><td id="grm_high"></td></tr>
+        <tr><td>DSCR <span class="small-note">(NOI / Debt Service)</span></td>
+          <td id="dscr_low"></td><td id="dscr_mid"></td><td id="dscr_high"></td></tr>
       </table>
     </div>
 
     <div class="card">
-      <h2>🎯 Target Offer Price (Cap Rate ≥ 20%)</h2>
-      <p class="small-note">Maximum price at which Mid and High scenarios achieve 20%+ cap rate</p>
+      <h2>🎯 Target Offer Price (Cap Rate ≥ 11%)</h2>
+      <p class="small-note">Maximum price at which Mid and High scenarios achieve 11%+ cap rate</p>
       <table class="results-table">
-        <tr><td>Max Offer @ 20% (Mid)</td><td id="offer_mid"></td></tr>
-        <tr><td>Max Offer @ 20% (High)</td><td id="offer_high"></td></tr>
+        <tr><td>Max Offer @ 11% (Mid)</td><td id="offer_mid"></td></tr>
+        <tr><td>Max Offer @ 11% (High)</td><td id="offer_high"></td></tr>
       </table>
       <div class="offer-banner">
         <div class="label">Suggested Maximum Offer Price</div>
@@ -1015,8 +1053,8 @@
       </div>
       <table class="results-table" style="margin-top:16px;">
         <tr><th>At suggested price:</th><th>Value</th><th>Target</th><th>Status</th></tr>
-        <tr><td>Mid Cap Rate</td><td id="v_mid_cap"></td><td>≥ 20.0%</td><td id="v_mid_status"></td></tr>
-        <tr><td>High Cap Rate</td><td id="v_high_cap"></td><td>≥ 20.0%</td><td id="v_high_status"></td></tr>
+        <tr><td>Mid Cap Rate</td><td id="v_mid_cap"></td><td>≥ 11.0%</td><td id="v_mid_status"></td></tr>
+        <tr><td>High Cap Rate</td><td id="v_high_cap"></td><td>≥ 11.0%</td><td id="v_high_status"></td></tr>
         <tr><td>Mid Monthly Cash Flow</td><td id="v_mid_cf" colspan="3" style="text-align:right;"></td></tr>
       </table>
     </div>
@@ -1036,6 +1074,13 @@
       <div class="flex-between">
         <h2 style="margin:0; border:none; padding:0;">🏢 Property Details</h2>
         <button class="reset" onclick="resetLTRDefaults()">Reset Defaults</button>
+      </div>
+      <div class="row"><label>Listing URL <span class="small-note" style="display:inline;">(Redfin/Zillow/Realtor)</span></label>
+        <input type="text" id="ltr_listingUrl" placeholder="paste listing URL to auto-fill" style="width:260px; text-align:left;" autocomplete="off" />
+      </div>
+      <div class="row" style="justify-content:flex-end;">
+        <button class="ltr-action-btn" onclick="fetchListing('ltr')" style="margin:0;">🔗 Pull from Listing</button>
+        <span id="ltr_listingStatus" class="small-note" style="margin-left:8px;"></span>
       </div>
       <div class="row"><label>Property Address</label>
         <div class="autocomplete-wrapper">
@@ -1305,6 +1350,22 @@ async function autoFetchPropertyDetails() {
   const brBadge = $('bedroomsSource');
   const baBadge = $('bathroomsSource');
   baBadge.textContent = '';
+
+  // ---- Skip lookup chain if BR + BA already came from the listing URL ----
+  // fetchListing() tags the inputs with dataset.source='listing' so we don't
+  // re-fetch (and potentially overwrite) listing-accurate values with worse
+  // data from RentCast/Redfin/Zillow.
+  const brFromListing = $('bedrooms').dataset.source === 'listing';
+  const baFromListing = $('bathrooms').dataset.source === 'listing';
+  if (brFromListing && baFromListing) {
+    const br = $('bedrooms').value, ba = $('bathrooms').value;
+    brBadge.textContent = `Listing: ${br} BR`;
+    baBadge.textContent = `Listing: ${ba} BA`;
+    brBadge.style.background = baBadge.style.background = 'rgba(59,130,246,0.15)';
+    brBadge.style.color = baBadge.style.color = 'var(--accent)';
+    brBadge.style.borderColor = baBadge.style.borderColor = 'var(--accent)';
+    return;
+  }
 
   const setBadgeState = (badge, text, state) => {
     badge.textContent = text;
@@ -1615,6 +1676,153 @@ async function fetchAirROIComparables() {
   } finally {
     if (btn) { btn.textContent = orig; btn.disabled = false; }
   }
+}
+
+// ============================================================
+// AirDNA Rentalizer PDF — upload, parse server-side, populate fields
+// ============================================================
+let _airdnaPdfData = null;
+
+async function uploadAirDNAPdf(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const status = $('airdnaPdfStatus');
+  status.textContent = `⏳ Parsing ${file.name}…`;
+  status.style.color = 'var(--muted)';
+
+  try {
+    const bytes = await file.arrayBuffer();
+    const r = await fetch('/api/airdna/upload-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/pdf' },
+      body: bytes
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      status.textContent = `⚠ ${d.error || 'parse failed'}`;
+      status.style.color = 'var(--red)';
+      return;
+    }
+
+    _airdnaPdfData = d;
+
+    // Populate read-only inputs
+    $('pdfAdr').value = d.adr ? Math.round(d.adr) : '';
+    $('pdfOccupancy').value = d.occupancy ? Math.round(d.occupancy * 10) / 10 : '';
+    $('pdfRevenue').value = d.revenue ? Math.round(d.revenue) : '';
+    $('pdfNoi').value = d.noi ? Math.round(d.noi) : '';
+    $('pdfOpex').value = d.opex ? Math.round(d.opex) : '';
+
+    const found = [
+      d.adr ? `ADR $${Math.round(d.adr)}` : null,
+      d.occupancy ? `${d.occupancy.toFixed(1)}% occ` : null,
+      d.revenue ? `$${Math.round(d.revenue).toLocaleString()} rev` : null,
+      d.noi ? `$${Math.round(d.noi).toLocaleString()} NOI` : null,
+      d.opex ? `$${Math.round(d.opex).toLocaleString()} OpEx` : null,
+      d.comps?.length ? `${d.comps.length} comps` : null
+    ].filter(Boolean);
+
+    if (found.length === 0) {
+      status.textContent = `⚠ PDF read, but no recognizable AirDNA fields found (${d.pageCount} pages)`;
+      status.style.color = 'var(--yellow)';
+    } else {
+      status.textContent = `✓ ${found.join(' · ')}`;
+      status.style.color = 'var(--green)';
+      $('airdnaPdfApplyBtn').disabled = false;
+    }
+
+    // Render comps list with full AirDNA column shape
+    const cc = $('pdfCompsContainer');
+    if (d.comps && d.comps.length) {
+      let html = `<b>${d.comps.length} comparable listing${d.comps.length === 1 ? '' : 's'} from PDF:</b>`;
+      html += `<table style="width:100%; border-collapse:collapse; font-size:11px; margin-top:6px;">
+        <tr>
+          <th style="text-align:left; border-bottom:1px solid var(--border); padding:4px;">Title</th>
+          <th style="text-align:right; border-bottom:1px solid var(--border); padding:4px;">BR/BA</th>
+          <th style="text-align:right; border-bottom:1px solid var(--border); padding:4px;">Rev Pot</th>
+          <th style="text-align:right; border-bottom:1px solid var(--border); padding:4px;">Days Avail</th>
+          <th style="text-align:right; border-bottom:1px solid var(--border); padding:4px;">Revenue</th>
+          <th style="text-align:right; border-bottom:1px solid var(--border); padding:4px;">Occ%</th>
+          <th style="text-align:right; border-bottom:1px solid var(--border); padding:4px;">ADR</th>
+        </tr>`;
+      d.comps.slice(0, 30).forEach(c => {
+        const adr = c.adr ? '$' + Math.round(c.adr * 10) / 10 : '—';
+        html += `<tr>
+          <td style="padding:4px; border-bottom:1px solid var(--border);">${c.title || '—'}</td>
+          <td style="text-align:right; padding:4px; border-bottom:1px solid var(--border);">${c.bedrooms || '—'}/${c.bathrooms || '—'}</td>
+          <td style="text-align:right; padding:4px; border-bottom:1px solid var(--border);">${c.revenuePotential ? '$' + c.revenuePotential.toLocaleString() : '—'}</td>
+          <td style="text-align:right; padding:4px; border-bottom:1px solid var(--border);">${c.daysAvailable || '—'}</td>
+          <td style="text-align:right; padding:4px; border-bottom:1px solid var(--border);">${c.revenue ? '$' + Math.round(c.revenue).toLocaleString() : '—'}</td>
+          <td style="text-align:right; padding:4px; border-bottom:1px solid var(--border);">${c.occupancy ? c.occupancy.toFixed(1) + '%' : '—'}</td>
+          <td style="text-align:right; padding:4px; border-bottom:1px solid var(--border);">${adr}</td>
+        </tr>`;
+      });
+      html += `</table>`;
+      html += `<button class="reset" style="margin-top:8px;" onclick="importPdfCompsToTable()">↓ Add ${d.comps.length} comps to main Comps table</button>`;
+      cc.innerHTML = html;
+    } else {
+      cc.innerHTML = '';
+    }
+
+  } catch (e) {
+    status.textContent = '❌ ' + e.message;
+    status.style.color = 'var(--red)';
+  }
+  // Reset the input so re-uploading the same file works
+  event.target.value = '';
+}
+
+// Apply PDF Avg ADR + Avg Occupancy to Mid, then derive Low/High around it.
+//   Mid  ADR = PDF Avg ADR        Mid  Occ = PDF Avg Occupancy
+//   Low  ADR = Mid × 0.80         Low  Occ = Mid − 10 pts
+//   High ADR = Mid × 1.20         High Occ = Mid + 10 pts
+function applyAirDNAPdfToScenarios() {
+  const d = _airdnaPdfData;
+  if (!d) return;
+  const adr = d.adr || 0;
+  const occ = d.occupancy || 0;
+  const status = $('airdnaPdfStatus');
+
+  if (!adr && !occ) {
+    status.textContent += ' · ⚠ no ADR/Occ data to apply';
+    return;
+  }
+
+  if (adr) {
+    $('adrLow').value = Math.round(adr * 0.8);
+    $('adrMid').value = Math.round(adr);
+    $('adrHigh').value = Math.round(adr * 1.2);
+  }
+  if (occ) {
+    $('occLow').value = Math.round(Math.max(0, occ - 10));
+    $('occMid').value = Math.round(occ);
+    $('occHigh').value = Math.round(Math.min(100, occ + 10));
+  }
+  calculate();
+  status.textContent += ` · ✓ Mid = $${Math.round(adr)} / ${Math.round(occ)}% · Low = ±20% ADR / −10pt occ · High = +20% / +10pt`;
+}
+
+function importPdfCompsToTable() {
+  const d = _airdnaPdfData;
+  if (!d?.comps?.length) return;
+  d.comps.forEach(c => {
+    comps.push({
+      source: c.title || 'AirDNA PDF',
+      url: '',
+      adr: Math.round((c.adr || 0) * 10) / 10,
+      occ: c.occupancy || 0,
+      br: c.bedrooms || 0,
+      ba: c.bathrooms || 0,
+      sleeps: 0,
+      daysAvail: c.daysAvailable || 0,
+      reviews: 0,
+      revenue: c.revenue || 0
+    });
+  });
+  saveComps();
+  renderComps();
+  const status = $('airdnaPdfStatus');
+  status.textContent += ` · ✓ ${d.comps.length} comps added`;
 }
 
 // ---- Fetch ADR/Occupancy/Revenue estimate from AirROI /calculator/estimate ----
@@ -2141,6 +2349,8 @@ function calculate() {
     const capRate = annualNOI / price;
     const coc = annualCF / totalInvested;
     const grm = price / annualRev;
+    const annualDS = monthlyMortgage * 12;
+    const dscr = annualDS > 0 ? annualNOI / annualDS : 0;
 
     $(`rev_${s.key}`).textContent = fmt$(monthlyRev);
     $(`rev_${s.key}_a`).textContent = fmt$(annualRev);
@@ -2157,10 +2367,14 @@ function calculate() {
 
     const capEl = $(`cap_${s.key}`);
     capEl.textContent = fmtPct(capRate);
-    capEl.className = capRate >= 0.20 ? 'positive' : (capRate >= 0.08 ? '' : 'negative');
+    capEl.className = capRate >= 0.11 ? 'positive' : (capRate >= 0.06 ? '' : 'negative');
 
     $(`coc_${s.key}`).textContent = fmtPct(coc);
     $(`grm_${s.key}`).textContent = isFinite(grm) ? grm.toFixed(1) + 'x' : '—';
+    const dscrEl = $(`dscr_${s.key}`);
+    dscrEl.textContent = isFinite(dscr) && dscr > 0 ? dscr.toFixed(2) : '—';
+    // Lenders typically want 1.25+ for STR/investment loans
+    dscrEl.className = dscr >= 1.25 ? 'positive' : (dscr >= 1.0 ? '' : 'negative');
   });
 
   // --- Target Offer Price Optimizer ---
@@ -2168,7 +2382,7 @@ function calculate() {
   // Solve for Price:
   // Price * (targetCap + taxRate) = AnnualRev*(1-vfee) - FixedOpExNoTax*12
   // Price = (AnnualRev*(1-vfee) - FixedOpExNoTax*12) / (targetCap + taxRate)
-  const targetCap = 0.20;
+  const targetCap = 0.11;
   const fixedOpexNoTax = fixedOpex - monthlyTax; // remove the tax (price-dependent)
   const vfee = airbnbFee + pmPct;
 
@@ -2186,7 +2400,7 @@ function calculate() {
   $('offer_high').textContent = fmt$(offerHigh);
   $('offer_suggested').textContent = (suggested > 0 ? fmt$(suggested) : 'Not feasible');
   if (suggested <= 0) {
-    $('offer_sub').textContent = 'Revenue too low to achieve 20% cap rate at any price';
+    $('offer_sub').textContent = 'Revenue too low to achieve 11% cap rate at any price';
   } else {
     $('offer_sub').textContent = 'Lower of Mid/High to protect both scenarios';
   }
@@ -2202,8 +2416,8 @@ function calculate() {
     const highCap = capAtPrice(num('adrHigh'), num('occHigh') / 100, suggested);
     $('v_mid_cap').textContent = fmtPct(midCap);
     $('v_high_cap').textContent = fmtPct(highCap);
-    $('v_mid_status').innerHTML = midCap >= 0.199 ? '<span class="tag pass">Pass</span>' : '<span class="tag fail">Fail</span>';
-    $('v_high_status').innerHTML = highCap >= 0.199 ? '<span class="tag pass">Pass</span>' : '<span class="tag fail">Fail</span>';
+    $('v_mid_status').innerHTML = midCap >= 0.1099 ? '<span class="tag pass">Pass</span>' : '<span class="tag fail">Fail</span>';
+    $('v_high_status').innerHTML = highCap >= 0.1099 ? '<span class="tag pass">Pass</span>' : '<span class="tag fail">Fail</span>';
 
     // Monthly cash flow at suggested price (mid scenario)
     const suggestedLoan = suggested * (1 - downPct);
@@ -2326,7 +2540,9 @@ $('address').addEventListener('change', onAddressChange);
 function markManual(inputId, badgeId) {
   $(inputId).addEventListener('input', () => {
     const badge = $(badgeId);
-    if (badge.textContent.startsWith('Auto:')) {
+    // Also clear the dataset.source flag so re-running auto-fetch isn't suppressed
+    delete $(inputId).dataset.source;
+    if (badge.textContent.startsWith('Auto:') || badge.textContent.startsWith('Listing:')) {
       badge.textContent = 'Manual';
       badge.style.background = 'rgba(148, 163, 184, 0.15)';
       badge.style.color = 'var(--muted)';
@@ -2526,9 +2742,9 @@ function buildWorkbook() {
     push();
   }
 
-  push('🎯 TARGET OFFER PRICE (Cap Rate ≥ 20%)');
-  push('Max Offer @ 20% (Mid)', parseCurrency($('offer_mid').textContent));
-  push('Max Offer @ 20% (High)', parseCurrency($('offer_high').textContent));
+  push('🎯 TARGET OFFER PRICE (Cap Rate ≥ 11%)');
+  push('Max Offer @ 11% (Mid)', parseCurrency($('offer_mid').textContent));
+  push('Max Offer @ 11% (High)', parseCurrency($('offer_high').textContent));
   push('SUGGESTED MAX OFFER', parseCurrency($('offer_suggested').textContent));
   push('Mid Cap Rate at Suggested', parsePct($('v_mid_cap').textContent));
   push('High Cap Rate at Suggested', parsePct($('v_high_cap').textContent));
@@ -3206,6 +3422,107 @@ async function ltrFetchMortgage() {
     container.innerHTML = html;
   } catch (e) {
     container.innerHTML = `<span style="color:var(--red);">❌ ${e.message}</span>`;
+  }
+}
+
+// ============================================================
+// 🔗 Listing-URL parser — auto-fill price + address + BR/BA from Redfin/Zillow/Realtor
+// Used by both STR (tab='str') and LTR (tab='ltr')
+// ============================================================
+async function fetchListing(tab) {
+  const cfg = tab === 'ltr'
+    ? { urlId: 'ltr_listingUrl', statusId: 'ltr_listingStatus', addressId: 'ltr_address',
+        priceId: 'ltr_price', bedroomsId: 'ltr_bedrooms', bathroomsId: 'ltr_bathrooms',
+        yearBuiltId: 'ltr_yearBuilt', taxRateId: 'ltr_taxRate',
+        // LTR has no dedicated HOA field — fold HOA into "Other OpEx" (monthly $)
+        hoaTargetId: 'ltr_otherOpex', hoaIsMonthly: true,
+        recalc: ltrCalc }
+    : { urlId: 'listingUrl', statusId: 'listingStatus', addressId: 'address',
+        priceId: 'purchasePrice', bedroomsId: 'bedrooms', bathroomsId: 'bathrooms',
+        yearBuiltId: null, taxRateId: 'taxRate',
+        hoaTargetId: 'hoa', hoaIsMonthly: true,
+        recalc: calculate };
+
+  const url = $(cfg.urlId).value.trim();
+  const status = $(cfg.statusId);
+  if (!url) { status.textContent = 'paste a Redfin/Zillow URL first'; status.style.color = 'var(--yellow)'; return; }
+  if (!/^https?:\/\//i.test(url)) { status.textContent = 'must start with http(s)://'; status.style.color = 'var(--red)'; return; }
+
+  status.textContent = '⏳ Fetching listing…';
+  status.style.color = 'var(--muted)';
+
+  try {
+    const r = await fetch('/api/listing/parse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      status.textContent = `⚠ ${d.error || 'failed'}${d.detail ? ' — ' + String(d.detail).slice(0, 100) : ''}`;
+      status.style.color = 'var(--red)';
+      return;
+    }
+
+    const filled = [];
+    if (d.price && d.price > 1000) { $(cfg.priceId).value = d.price; filled.push(`price $${d.price.toLocaleString()}`); }
+    if (d.address) { $(cfg.addressId).value = d.address; filled.push('address'); }
+    if (d.bedrooms) {
+      $(cfg.bedroomsId).value = d.bedrooms;
+      $(cfg.bedroomsId).dataset.source = 'listing'; // suppress later auto-lookup
+      filled.push(`${d.bedrooms}BR`);
+    }
+    if (d.bathrooms) {
+      $(cfg.bathroomsId).value = d.bathrooms;
+      $(cfg.bathroomsId).dataset.source = 'listing';
+      filled.push(`${d.bathrooms}BA`);
+    }
+    if (cfg.yearBuiltId && d.yearBuilt) { $(cfg.yearBuiltId).value = d.yearBuilt; filled.push(`built ${d.yearBuilt}`); }
+
+    // Pre-load lastLookupAddress so an immediate blur on #address doesn't trigger
+    // the auto-fetch chain when the listing already gave us the address.
+    if (typeof lastLookupAddress !== 'undefined' && d.address && tab === 'str') {
+      lastLookupAddress = d.address;
+    }
+
+    // Trigger blur on address so the state-tax auto-fill runs FIRST,
+    // then override with listing-specific tax rate if we got one.
+    $(cfg.addressId).dispatchEvent(new Event('blur'));
+
+    // HOA dues (monthly $) → write into the appropriate field on each tab
+    if (d.hoaMonthly && cfg.hoaTargetId) {
+      $(cfg.hoaTargetId).value = Math.round(d.hoaMonthly);
+      filled.push(`HOA $${Math.round(d.hoaMonthly)}/mo`);
+    }
+
+    // Tax: prefer the listing's actual rate; otherwise derive from annual $ ÷ price.
+    if (cfg.taxRateId && (d.taxRate || (d.taxAnnual && d.price))) {
+      const rate = d.taxRate && d.taxRate > 0
+        ? d.taxRate
+        : ((d.taxAnnual / d.price) * 100);
+      $(cfg.taxRateId).value = rate.toFixed(2);
+      // Tag the tax-source badge if it exists (STR tab)
+      const taxSrc = $('taxSource');
+      if (taxSrc) {
+        taxSrc.textContent = `From listing: ${rate.toFixed(2)}%`;
+        taxSrc.style.background = 'rgba(59, 130, 246, 0.15)';
+        taxSrc.style.color = 'var(--accent)';
+        taxSrc.style.borderColor = 'var(--accent)';
+      }
+      filled.push(`tax ${rate.toFixed(2)}%${d.taxAnnual ? ' ($' + d.taxAnnual.toLocaleString() + '/yr)' : ''}`);
+    }
+
+    if (filled.length) {
+      status.textContent = `✓ from ${d.source}: ${filled.join(' · ')}`;
+      status.style.color = 'var(--green)';
+      cfg.recalc();
+    } else {
+      status.textContent = '⚠ Nothing extractable from this URL';
+      status.style.color = 'var(--yellow)';
+    }
+  } catch (e) {
+    status.textContent = '❌ ' + e.message;
+    status.style.color = 'var(--red)';
   }
 }
 

@@ -13,7 +13,8 @@
     "install-scraper": "npm install playwright && npx playwright install chromium"
   },
   "dependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "pdfjs-dist": "^4.6.82"
   },
   "optionalDependencies": {
     "playwright": "^1.59.1"

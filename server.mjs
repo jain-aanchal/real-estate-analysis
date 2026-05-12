@@ -2,6 +2,31 @@
 // Serves static index.html and proxies AirDNA Enterprise API calls,
 // keeping the API key server-side.
 
+// ----------------------------------------------------------------------------
+// Silence pdfjs-dist polyfill warnings BEFORE any module imports it.
+// The legacy build emits these at module init by writing directly to stderr
+// AND via console.{log,warn,error}. We never render PDFs (text-only extraction),
+// so the polyfill noise is irrelevant. Install filters globally.
+// ----------------------------------------------------------------------------
+const _PDF_NOISE = /Cannot polyfill (?:`DOMMatrix`|`Path2D`)|Indexing all PDF objects/;
+const _origStderrWrite = process.stderr.write.bind(process.stderr);
+process.stderr.write = function (chunk, ...rest) {
+  if (_PDF_NOISE.test(String(chunk || ''))) return true;
+  return _origStderrWrite(chunk, ...rest);
+};
+const _origStdoutWrite = process.stdout.write.bind(process.stdout);
+process.stdout.write = function (chunk, ...rest) {
+  if (_PDF_NOISE.test(String(chunk || ''))) return true;
+  return _origStdoutWrite(chunk, ...rest);
+};
+for (const m of ['log', 'warn', 'error', 'info']) {
+  const orig = console[m].bind(console);
+  console[m] = (...args) => {
+    if (args.length && _PDF_NOISE.test(String(args[0] || ''))) return;
+    orig(...args);
+  };
+}
+
 import express from 'express';
 import { readFileSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
@@ -740,6 +765,77 @@ function normalizeComps(list) {
     };
   }).filter(c => c.adr > 0 || c.revenue > 0);
 }
+
+// ============================================================================
+// AirDNA Rentalizer PDF upload + parse
+// POST /api/airdna/upload-pdf  (raw body, Content-Type: application/pdf)
+// Returns: { adr, occupancy, revenue, noi, opex, comps[], pageCount }
+// ============================================================================
+import { parseAirDNAPdf } from './airdna-pdf-parser.mjs';
+
+app.post('/api/airdna/upload-pdf',
+  express.raw({ type: 'application/pdf', limit: '25mb' }),
+  async (req, res) => {
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+      return res.status(400).json({ error: 'No PDF body received. Send raw bytes with Content-Type: application/pdf' });
+    }
+    if (req.body.slice(0, 4).toString('utf8') !== '%PDF') {
+      return res.status(400).json({ error: 'Body is not a valid PDF (missing %PDF header)' });
+    }
+    try {
+      console.log(`[airdna-pdf] received ${req.body.length} bytes`);
+      const parsed = await parseAirDNAPdf(req.body);
+      console.log('[airdna-pdf] parsed:', {
+        adr: parsed.adr, occ: parsed.occupancy, rev: parsed.revenue,
+        noi: parsed.noi, opex: parsed.opex, comps: parsed.comps.length
+      });
+      res.json(parsed);
+    } catch (err) {
+      console.error('[airdna-pdf] error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// ============================================================================
+// Listing parser — extract price + details from a Redfin/Zillow/realtor URL
+// POST /api/listing/parse { url }
+// ============================================================================
+app.post('/api/listing/parse', async (req, res) => {
+  const { url } = req.body || {};
+  if (!url) return res.status(400).json({ error: 'url is required' });
+  if (!/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'url must start with http(s)://' });
+
+  const playwrightInstalled = existsSync(join(__dirname, 'node_modules', 'playwright'));
+  if (!playwrightInstalled) {
+    return res.status(501).json({ error: 'Playwright not installed. Run: npm run install-scraper' });
+  }
+
+  console.log(`[listing/parse] ${url}`);
+  const child = spawn('node', ['listing-scraper.mjs', '--url', url], { cwd: __dirname });
+  let stdout = '', stderr = '';
+  child.stdout.on('data', c => stdout += c.toString());
+  child.stderr.on('data', c => { stderr += c.toString(); process.stderr.write(c); });
+
+  const killTimer = setTimeout(() => child.kill('SIGKILL'), 75000);
+  child.on('close', (code) => {
+    clearTimeout(killTimer);
+    if (code !== 0) {
+      return res.status(500).json({
+        error: 'Listing scrape failed',
+        code,
+        detail: stderr.slice(-500)
+      });
+    }
+    try {
+      const data = JSON.parse(stdout);
+      console.log('[listing/parse] OK:', { price: data.price, br: data.bedrooms, ba: data.bathrooms, addr: data.address });
+      res.json(data);
+    } catch (e) {
+      res.status(500).json({ error: 'Invalid scraper output', detail: stdout.slice(0, 500) });
+    }
+  });
+});
 
 // ============================================================================
 // LTR (Long-Term Rental / Multi-Family) Endpoints
