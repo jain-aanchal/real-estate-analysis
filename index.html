@@ -642,6 +642,277 @@
   }
   .link-pill:hover { background: var(--border); color: #fff; }
 
+  /* ===== Distressed tab ===== */
+  .distressed-container {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 16px 32px;
+  }
+  .distressed-filterbar {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+  }
+  .distressed-filterbar .filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .distressed-filterbar .filter-row label { font-size: 12px; color: var(--muted); }
+  .distressed-filterbar input[type="text"],
+  .distressed-filterbar input[type="number"],
+  .distressed-filterbar select {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .distressed-filterbar input[type="text"] { width: 280px; }
+  .distressed-filterbar input[type="number"] { width: 100px; }
+  .distressed-filterbar .filter-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    padding: 5px 10px;
+    border-radius: 14px;
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .distressed-filterbar .filter-pill input { accent-color: var(--accent); }
+  .distressed-filterbar .filter-pill.active {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .distressed-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+  @media (max-width: 1100px) {
+    .distressed-layout { grid-template-columns: 1fr; }
+  }
+  .distressed-results {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .distressed-results-header {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+    background: var(--panel-2);
+    font-size: 13px;
+  }
+  .distressed-results table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .distressed-results th,
+  .distressed-results td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .distressed-results th {
+    background: var(--panel-2);
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.4px;
+    cursor: pointer;
+  }
+  .distressed-results tbody tr { cursor: pointer; transition: background 0.1s; }
+  .distressed-results tbody tr:hover { background: var(--panel-2); }
+  .distressed-results tbody tr.selected { background: rgba(59,130,246,0.15); }
+
+  .status-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .status-pill.auction { background: rgba(239,68,68,0.18); color: #fca5a5; }
+  .status-pill.nod { background: rgba(245,158,11,0.18); color: #fcd34d; }
+  .status-pill.tax_delinquent { background: rgba(234,179,8,0.18); color: #fde047; }
+  .status-pill.on_market { background: rgba(16,185,129,0.18); color: #6ee7b7; }
+  .status-pill.in_contract { background: rgba(99,102,241,0.18); color: #a5b4fc; }
+  .status-pill.off_market { background: rgba(148,163,184,0.18); color: #cbd5e1; }
+
+  .flag-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    font-size: 10px;
+    margin-right: 2px;
+  }
+
+  .distressed-map {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    height: 600px;
+    position: sticky;
+    top: 14px;
+    overflow: hidden;
+  }
+  #distressedMap { height: 100%; width: 100%; }
+
+  .distressed-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100vh;
+    width: 540px;
+    max-width: 95vw;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    transform: translateX(100%);
+    transition: transform 0.25s;
+    z-index: 100;
+    overflow-y: auto;
+    box-shadow: -8px 0 24px rgba(0,0,0,0.4);
+  }
+  .distressed-drawer.open { transform: translateX(0); }
+  .drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--panel);
+    z-index: 1;
+  }
+  .drawer-header h2 { margin: 0; font-size: 15px; color: var(--accent); border: none; padding: 0; }
+  .drawer-close {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 22px;
+    cursor: pointer;
+  }
+  .drawer-body { padding: 14px 18px; }
+
+  .drawer-subtabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+    padding: 0 18px;
+    background: var(--panel-2);
+  }
+  .drawer-subtab {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  .drawer-subtab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .underwriting-card {
+    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  .underwriting-card h3 {
+    margin: 0 0 10px;
+    font-size: 12px;
+    color: #dbeafe;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .uw-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 14px;
+    margin-bottom: 10px;
+  }
+  .uw-grid .uw-item { display: flex; justify-content: space-between; font-size: 12px; }
+  .uw-grid .uw-item .lbl { color: #bfdbfe; }
+  .uw-grid .uw-item .val { color: #fff; font-weight: 600; }
+  .uw-assumptions {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255,255,255,0.15);
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .uw-assumptions input {
+    width: 100%;
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: 11px;
+    text-align: right;
+  }
+  .uw-assumptions label { display: block; color: #bfdbfe; font-size: 10px; margin-bottom: 2px; }
+
+  .record-section { margin-bottom: 14px; }
+  .record-section h4 {
+    color: var(--accent);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+    margin: 14px 0 8px;
+  }
+  .record-section .rec-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 12px;
+  }
+  .record-section .rec-row .lbl { color: var(--muted); }
+  .record-section .rec-row .val { color: var(--text); }
+  .record-section a { color: #93c5fd; font-size: 11px; }
+
+  .search-status { font-size: 12px; color: var(--muted); margin: 6px 0; }
+
+  /* Saved searches dropdown */
+  .saved-search-controls {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .saved-search-controls select {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
   /* Address input styling */
   #address {
     background: var(--panel-2);
@@ -671,6 +942,7 @@
 <div class="tabs">
   <button class="tab-btn active" data-tab="str" onclick="switchTab('str')">🏖️ Short-Term Rental</button>
   <button class="tab-btn" data-tab="ltr" onclick="switchTab('ltr')">🏢 Multi-Family LTR</button>
+  <button class="tab-btn" data-tab="distressed" onclick="switchTab('distressed')">🏚️ Distressed</button>
 </div>
 
 <!-- Save destination modal -->
@@ -1243,6 +1515,143 @@
   </div>
 </div>
 </div> <!-- /tab-ltr -->
+
+<!-- =================================================================== -->
+<!-- Distressed Properties Tab                                              -->
+<!-- =================================================================== -->
+<div id="tab-distressed" class="tab-content">
+<div class="distressed-container">
+
+  <!-- Filter bar -->
+  <div class="distressed-filterbar">
+    <div class="filter-row">
+      <label>📍 Location:</label>
+      <div class="autocomplete-wrapper" style="position:relative;">
+        <input type="text" id="ds_location" placeholder="city, state · zip · address (e.g. Cleveland, OH)" autocomplete="off" />
+        <div class="autocomplete-list" id="ds_locationDropdown"></div>
+      </div>
+      <button class="ltr-action-btn" onclick="distressedSearch()">🔍 Search</button>
+      <span class="saved-search-controls">
+        <select id="ds_savedSearch" onchange="loadSavedSearch(this.value)">
+          <option value="">— Saved searches —</option>
+        </select>
+        <button class="reset" onclick="saveCurrentSearch()">💾 Save</button>
+      </span>
+      <span id="ds_searchStatus" class="search-status"></span>
+    </div>
+
+    <div class="filter-row">
+      <span style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-right:4px;">Type:</span>
+      <label class="filter-pill"><input type="checkbox" data-filter="type" value="multi-family" checked /> Multi-family</label>
+      <label class="filter-pill"><input type="checkbox" data-filter="type" value="single-family" /> Single-family</label>
+      <label class="filter-pill"><input type="checkbox" data-filter="type" value="land" /> Land</label>
+      <label class="filter-pill"><input type="checkbox" data-filter="type" value="mixed-use" /> Mixed-use</label>
+    </div>
+
+    <div class="filter-row">
+      <span style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-right:4px;">Status:</span>
+      <label class="filter-pill"><input type="checkbox" data-filter="status" value="on_market" checked /> 🟢 On market</label>
+      <label class="filter-pill"><input type="checkbox" data-filter="status" value="auction" checked /> 🔴 Auction</label>
+      <label class="filter-pill"><input type="checkbox" data-filter="status" value="nod" checked /> 🟠 Pre-foreclosure (NOD)</label>
+      <label class="filter-pill"><input type="checkbox" data-filter="status" value="tax_delinquent" /> 🟡 Tax delinquent</label>
+      <label class="filter-pill"><input type="checkbox" data-filter="status" value="in_contract" /> 🟣 In contract</label>
+      <label class="filter-pill"><input type="checkbox" data-filter="status" value="off_market" /> ⚪ Off market</label>
+    </div>
+
+    <div class="filter-row">
+      <label>Price min: <input type="number" id="ds_priceMin" placeholder="$0" /></label>
+      <label>Price max: <input type="number" id="ds_priceMax" placeholder="$ any" /></label>
+      <label>Units min: <input type="number" id="ds_unitsMin" min="1" /></label>
+      <label>Units max: <input type="number" id="ds_unitsMax" /></label>
+      <label>BR min: <input type="number" id="ds_brMin" min="0" /></label>
+      <label>BA min: <input type="number" id="ds_baMin" min="0" step="0.5" /></label>
+      <label>Built before: <input type="number" id="ds_yearBefore" placeholder="e.g. 2000" min="1800" max="2030" /></label>
+      <label>Result cap:
+        <select id="ds_resultCap">
+          <option>250</option>
+          <option selected>500</option>
+          <option>1000</option>
+        </select>
+      </label>
+      <button class="reset" onclick="resetDistressedFilters()" style="margin-left:auto;">Reset Filters</button>
+    </div>
+  </div>
+
+  <!-- Two-column results + map layout -->
+  <div class="distressed-layout">
+    <div class="distressed-results">
+      <div class="distressed-results-header">
+        <span id="ds_resultCount" class="search-status">Enter a location to begin</span>
+        <span>
+          <button class="reset" onclick="exportDistressedCsv()" id="ds_exportBtn" disabled>📥 Export CSV</button>
+        </span>
+      </div>
+      <div style="max-height:560px; overflow-y:auto;">
+        <table id="ds_resultsTable">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="ds_selectAll" onchange="toggleSelectAll(this)" /></th>
+              <th>Status</th>
+              <th>Address</th>
+              <th>Type / Units</th>
+              <th>BR/BA</th>
+              <th>Year</th>
+              <th>Last sale</th>
+              <th>Est. value</th>
+              <th>Owner</th>
+              <th>Cap rate</th>
+              <th>Flags</th>
+            </tr>
+          </thead>
+          <tbody id="ds_resultsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="distressed-map">
+      <div id="distressedMap"></div>
+    </div>
+  </div>
+</div>
+</div> <!-- /tab-distressed -->
+
+<!-- Insights drawer (Sale Comp / Lease Data / Record) -->
+<div id="distressedDrawer" class="distressed-drawer">
+  <div class="drawer-header">
+    <h2 id="drawerTitle">Property Insights</h2>
+    <button class="drawer-close" onclick="closeDistressedDrawer()">×</button>
+  </div>
+  <div class="drawer-subtabs">
+    <button class="drawer-subtab active" data-subtab="saleComp" onclick="switchDrawerSubtab('saleComp')">Sale Comp</button>
+    <button class="drawer-subtab" data-subtab="leaseData" onclick="switchDrawerSubtab('leaseData')">Lease Data</button>
+    <button class="drawer-subtab" data-subtab="record" onclick="switchDrawerSubtab('record')">Record</button>
+  </div>
+  <div class="drawer-body">
+    <!-- Underwriting card always at top -->
+    <div class="underwriting-card" id="uwCard">
+      <h3>📊 Underwriting · whole-building LTR assumptions</h3>
+      <div class="uw-grid" id="uwGrid"></div>
+      <details>
+        <summary style="cursor:pointer; color:#bfdbfe; font-size:12px;">Adjust assumptions</summary>
+        <div class="uw-assumptions">
+          <div><label>Down %</label><input type="number" id="uw_downPct" value="35" step="1" /></div>
+          <div><label>Rate %</label><input type="number" id="uw_rate" value="7.25" step="0.05" /></div>
+          <div><label>Term yrs</label><input type="number" id="uw_termYears" value="30" step="1" /></div>
+          <div><label>Vacancy %</label><input type="number" id="uw_vacancyRate" value="6" step="0.5" /></div>
+          <div><label>Maint %</label><input type="number" id="uw_maintPct" value="8" step="0.5" /></div>
+          <div><label>CapEx %</label><input type="number" id="uw_capexPct" value="5" step="0.5" /></div>
+          <div><label>PM %</label><input type="number" id="uw_pmPct" value="8" step="0.5" /></div>
+          <div><label>Rent/unit $</label><input type="number" id="uw_rentPerUnit" step="50" /></div>
+        </div>
+      </details>
+    </div>
+
+    <!-- Subtab content -->
+    <div id="subtab_saleComp" class="drawer-subtab-pane"></div>
+    <div id="subtab_leaseData" class="drawer-subtab-pane" style="display:none;"></div>
+    <div id="subtab_record" class="drawer-subtab-pane" style="display:none;"></div>
+  </div>
+</div>
 
 <footer>
   Data sources: Bankrate, TheMortgageReports, Tax Foundation, Move.org, ApartmentList · April 2026
@@ -3528,6 +3937,650 @@ async function fetchListing(tab) {
 
 // Initial LTR render
 ltrCalc();
+
+// ============================================================
+// 🏚️ DISTRESSED PROPERTIES TAB
+// ============================================================
+
+// --- State ---
+const distressedState = {
+  filters: {
+    types: ['multi-family'],
+    statuses: ['on_market', 'auction', 'nod'],
+    priceMin: null, priceMax: null,
+    unitsMin: null, unitsMax: null,
+    brMin: null, baMin: null,
+    yearBefore: null
+  },
+  resultCap: 500,
+  results: [],
+  selectedPropertyId: null,
+  selectedProperty: null,        // full Insights record
+  insightsTab: 'saleComp',
+  mapMarkers: [],
+  map: null,
+  mapProvider: null              // 'google' | 'osm'
+};
+
+// --- Filter UI wiring ---
+function readDistressedFilters() {
+  const f = distressedState.filters;
+  f.types = [...document.querySelectorAll('input[data-filter="type"]:checked')].map(el => el.value);
+  f.statuses = [...document.querySelectorAll('input[data-filter="status"]:checked')].map(el => el.value);
+  f.priceMin = parseInt($('ds_priceMin').value) || null;
+  f.priceMax = parseInt($('ds_priceMax').value) || null;
+  f.unitsMin = parseInt($('ds_unitsMin').value) || null;
+  f.unitsMax = parseInt($('ds_unitsMax').value) || null;
+  f.brMin = parseInt($('ds_brMin').value) || null;
+  f.baMin = parseFloat($('ds_baMin').value) || null;
+  f.yearBefore = parseInt($('ds_yearBefore').value) || null;
+  distressedState.resultCap = parseInt($('ds_resultCap').value) || 500;
+  // Reflect active state on pills
+  document.querySelectorAll('.distressed-filterbar .filter-pill').forEach(p => {
+    const cb = p.querySelector('input');
+    p.classList.toggle('active', cb && cb.checked);
+  });
+}
+
+function resetDistressedFilters() {
+  document.querySelectorAll('input[data-filter="type"]').forEach(el => { el.checked = (el.value === 'multi-family'); });
+  document.querySelectorAll('input[data-filter="status"]').forEach(el => {
+    el.checked = ['on_market', 'auction', 'nod'].includes(el.value);
+  });
+  ['ds_priceMin', 'ds_priceMax', 'ds_unitsMin', 'ds_unitsMax', 'ds_brMin', 'ds_baMin', 'ds_yearBefore'].forEach(id => { $(id).value = ''; });
+  $('ds_resultCap').value = '500';
+  readDistressedFilters();
+}
+
+// --- Saved searches (Google Drive + localStorage fallback) ---
+const SAVED_SEARCH_LS = 'distressed_savedSearches_v1';
+
+function loadLocalSavedSearches() {
+  try { return JSON.parse(localStorage.getItem(SAVED_SEARCH_LS) || '[]'); }
+  catch { return []; }
+}
+
+function saveLocalSavedSearches(list) {
+  try { localStorage.setItem(SAVED_SEARCH_LS, JSON.stringify(list)); } catch {}
+}
+
+async function saveCurrentSearch() {
+  readDistressedFilters();
+  const name = prompt('Name this search:');
+  if (!name) return;
+  const entry = {
+    name,
+    location: $('ds_location').value.trim(),
+    filters: distressedState.filters,
+    resultCap: distressedState.resultCap,
+    savedAt: Date.now()
+  };
+  // Try Google Drive sync (re-uses existing OAuth from Save Analysis modal)
+  try {
+    if (typeof gAccessToken !== 'undefined' && gAccessToken) {
+      await driveSaveSearch(entry);
+    }
+  } catch (e) {
+    console.warn('Drive save failed, falling back to localStorage:', e.message);
+  }
+  const list = loadLocalSavedSearches();
+  list.push(entry);
+  saveLocalSavedSearches(list);
+  refreshSavedSearchDropdown();
+  alert(`Saved "${name}"`);
+}
+
+function refreshSavedSearchDropdown() {
+  const list = loadLocalSavedSearches();
+  const sel = $('ds_savedSearch');
+  sel.innerHTML = '<option value="">— Saved searches —</option>' +
+    list.map(s => `<option value="${encodeURIComponent(s.name)}">${s.name}</option>`).join('');
+}
+
+function loadSavedSearch(nameEnc) {
+  if (!nameEnc) return;
+  const name = decodeURIComponent(nameEnc);
+  const list = loadLocalSavedSearches();
+  const e = list.find(x => x.name === name);
+  if (!e) return;
+  $('ds_location').value = e.location || '';
+  $('ds_resultCap').value = e.resultCap || 500;
+  const f = e.filters || {};
+  document.querySelectorAll('input[data-filter="type"]').forEach(el => { el.checked = (f.types || []).includes(el.value); });
+  document.querySelectorAll('input[data-filter="status"]').forEach(el => { el.checked = (f.statuses || []).includes(el.value); });
+  $('ds_priceMin').value = f.priceMin || '';
+  $('ds_priceMax').value = f.priceMax || '';
+  $('ds_unitsMin').value = f.unitsMin || '';
+  $('ds_unitsMax').value = f.unitsMax || '';
+  $('ds_brMin').value = f.brMin || '';
+  $('ds_baMin').value = f.baMin || '';
+  $('ds_yearBefore').value = f.yearBefore || '';
+  readDistressedFilters();
+  distressedSearch();
+}
+
+async function driveSaveSearch(entry) {
+  // Upload as JSON to app-data folder
+  const token = await requestGoogleToken();
+  const metadata = {
+    name: `distressed-${entry.name}.json`,
+    parents: ['appDataFolder'],
+    mimeType: 'application/json'
+  };
+  const boundary = '----saved-' + Date.now();
+  const body = `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+               `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(entry)}\r\n--${boundary}--`;
+  await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body
+  });
+}
+
+// --- Search & render ---
+async function distressedSearch() {
+  readDistressedFilters();
+  const location = $('ds_location').value.trim();
+  if (!location) {
+    $('ds_searchStatus').textContent = 'Enter a city, zip, or address first';
+    $('ds_searchStatus').style.color = 'var(--yellow)';
+    return;
+  }
+  $('ds_searchStatus').textContent = '⏳ Searching…';
+  $('ds_searchStatus').style.color = 'var(--muted)';
+
+  try {
+    const params = new URLSearchParams({
+      location,
+      cap: distressedState.resultCap,
+      filters: JSON.stringify(distressedState.filters)
+    });
+    const r = await fetch(`/api/distressed/search?${params}`);
+    const data = await r.json();
+    if (!r.ok) {
+      $('ds_searchStatus').textContent = `⚠ ${data.error || 'failed'}`;
+      $('ds_searchStatus').style.color = 'var(--red)';
+      return;
+    }
+    distressedState.results = data.results || [];
+    const isDemo = data.source === 'sample';
+    const sourceLabel = {
+      'propertyradar': '🟢 PropertyRadar (live, paid)',
+      'auction.com':   '🟢 Auction.com (live)',
+      'rentcast':      '🟢 RentCast (live)',
+      'sample':        '🟡 DEMO DATA — no live source matched this area'
+    }[data.source] || `source: ${data.source}`;
+    $('ds_searchStatus').textContent = `${data.count} results · ${sourceLabel}${data.cached ? ' (cached)' : ''}` +
+      (data.totalAvailable ? ` · ${data.totalAvailable.toLocaleString()} total in market` : '');
+    $('ds_searchStatus').style.color = isDemo ? 'var(--yellow)' : 'var(--green)';
+    $('ds_resultCount').innerHTML = `${data.count} properties` +
+      (isDemo ? ' <span style="color:var(--yellow); font-size:11px;">· demo only</span>' : '');
+    $('ds_exportBtn').disabled = data.count === 0;
+    renderDistressedResults();
+    renderDistressedMap();
+  } catch (e) {
+    $('ds_searchStatus').textContent = '❌ ' + e.message;
+    $('ds_searchStatus').style.color = 'var(--red)';
+  }
+}
+
+function renderDistressedResults() {
+  const tbody = $('ds_resultsBody');
+  if (!distressedState.results.length) {
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:32px; color:var(--muted);">No distressed properties match your filters.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = distressedState.results.map(p => `
+    <tr data-id="${p.id}" onclick="openInsights('${p.id}')" class="${distressedState.selectedPropertyId === p.id ? 'selected' : ''}">
+      <td onclick="event.stopPropagation()"><input type="checkbox" data-id="${p.id}" /></td>
+      <td><span class="status-pill ${p.status}">${p.status.replace('_', ' ')}</span></td>
+      <td>${p.address}</td>
+      <td>${p.propertyType} ${p.units > 1 ? '· ' + p.units + ' units' : ''}</td>
+      <td>${p.bedrooms || '—'}/${p.bathrooms || '—'}</td>
+      <td>${p.yearBuilt || '—'}</td>
+      <td>${p.lastSalePrice ? '$' + p.lastSalePrice.toLocaleString() : '—'}</td>
+      <td>${p.estimatedValue ? '$' + p.estimatedValue.toLocaleString() : '—'}</td>
+      <td title="${p.ownerName || ''}">${(p.ownerName || '').slice(0, 22)}${(p.ownerName || '').length > 22 ? '…' : ''}</td>
+      <td>${p.capRate ? (p.capRate * 100).toFixed(1) + '%' : '—'}</td>
+      <td>${(p.flags || []).map(f => `<span class="flag-tag">${f}</span>`).join('')}</td>
+    </tr>
+  `).join('');
+}
+
+function toggleSelectAll(el) {
+  document.querySelectorAll('#ds_resultsBody input[type="checkbox"]').forEach(cb => { cb.checked = el.checked; });
+}
+
+function exportDistressedCsv() {
+  const sel = [...document.querySelectorAll('#ds_resultsBody input[type="checkbox"]:checked')]
+              .map(cb => cb.dataset.id);
+  const rows = sel.length
+    ? distressedState.results.filter(r => sel.includes(r.id))
+    : distressedState.results;
+  if (!rows.length) return;
+  const cols = ['address', 'propertyType', 'units', 'bedrooms', 'bathrooms', 'yearBuilt',
+                'lastSalePrice', 'lastSaleDate', 'estimatedValue', 'ownerName', 'status', 'capRate'];
+  const lines = [cols.join(',')].concat(rows.map(r => cols.map(c => {
+    const v = r[c] ?? '';
+    return /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
+  }).join(',')));
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `distressed-${Date.now()}.csv`;
+  a.click();
+}
+
+// --- Map (Google primary, OSM/Leaflet fallback) ---
+async function initDistressedMap() {
+  if (distressedState.map) return;
+  const cfg = await fetch('/api/maps/config').then(r => r.json()).catch(() => ({ provider: 'osm' }));
+  distressedState.mapProvider = cfg.provider;
+  if (cfg.provider === 'google' && cfg.apiKey) {
+    await loadGoogleMaps(cfg.apiKey);
+    distressedState.map = new google.maps.Map($('distressedMap'), {
+      center: { lat: 39.5, lng: -98.35 }, zoom: 4, mapId: 'distressed'
+    });
+  } else {
+    await loadLeaflet();
+    distressedState.map = L.map('distressedMap').setView([39.5, -98.35], 4);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(distressedState.map);
+  }
+}
+
+function loadGoogleMaps(apiKey) {
+  return new Promise((resolve, reject) => {
+    if (window.google?.maps) return resolve();
+    const s = document.createElement('script');
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Google Maps failed to load'));
+    document.head.appendChild(s);
+  });
+}
+
+function loadLeaflet() {
+  return new Promise((resolve) => {
+    if (window.L) return resolve();
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(css);
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    s.onload = resolve;
+    document.head.appendChild(s);
+  });
+}
+
+function renderDistressedMap() {
+  if (!distressedState.map) return;
+  // Clear old
+  for (const m of distressedState.mapMarkers) {
+    if (m.setMap) m.setMap(null);
+    else if (m.remove) m.remove();
+  }
+  distressedState.mapMarkers = [];
+  const valid = distressedState.results.filter(p => p.lat && p.lng);
+  if (!valid.length) return;
+
+  const colorMap = { auction: '#ef4444', nod: '#f59e0b', tax_delinquent: '#facc15', on_market: '#10b981', off_market: '#94a3b8', in_contract: '#a78bfa' };
+  if (distressedState.mapProvider === 'google') {
+    const bounds = new google.maps.LatLngBounds();
+    valid.forEach(p => {
+      const marker = new google.maps.Marker({
+        position: { lat: p.lat, lng: p.lng },
+        map: distressedState.map,
+        title: p.address,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 7, fillColor: colorMap[p.status] || '#999',
+          fillOpacity: 0.85, strokeWeight: 1, strokeColor: '#fff'
+        }
+      });
+      marker.addListener('click', () => openInsights(p.id));
+      distressedState.mapMarkers.push(marker);
+      bounds.extend(marker.getPosition());
+    });
+    distressedState.map.fitBounds(bounds);
+  } else {
+    const latlngs = [];
+    valid.forEach(p => {
+      const marker = L.circleMarker([p.lat, p.lng], {
+        radius: 7, fillColor: colorMap[p.status] || '#999',
+        color: '#fff', weight: 1, opacity: 1, fillOpacity: 0.85
+      }).bindPopup(p.address).on('click', () => openInsights(p.id));
+      marker.addTo(distressedState.map);
+      distressedState.mapMarkers.push(marker);
+      latlngs.push([p.lat, p.lng]);
+    });
+    if (latlngs.length) distressedState.map.fitBounds(latlngs, { padding: [30, 30] });
+  }
+}
+
+// --- Insights drawer ---
+async function openInsights(propertyId) {
+  const summary = distressedState.results.find(p => p.id === propertyId);
+  if (!summary) return;
+  distressedState.selectedPropertyId = propertyId;
+  document.querySelectorAll('#ds_resultsBody tr').forEach(tr => {
+    tr.classList.toggle('selected', tr.dataset.id === propertyId);
+  });
+
+  $('drawerTitle').textContent = summary.address;
+  $('distressedDrawer').classList.add('open');
+
+  // Fetch full record (server precomputes underwriting)
+  try {
+    const r = await fetch('/api/distressed/property', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: summary.address })
+    });
+    const full = await r.json();
+    distressedState.selectedProperty = { ...summary, ...full };
+  } catch {
+    distressedState.selectedProperty = summary;
+  }
+  renderUnderwritingCard();
+  renderInsightsTab(distressedState.insightsTab);
+}
+
+function closeDistressedDrawer() {
+  $('distressedDrawer').classList.remove('open');
+  distressedState.selectedPropertyId = null;
+  document.querySelectorAll('#ds_resultsBody tr.selected').forEach(tr => tr.classList.remove('selected'));
+}
+
+function switchDrawerSubtab(name) {
+  distressedState.insightsTab = name;
+  document.querySelectorAll('.drawer-subtab').forEach(b => b.classList.toggle('active', b.dataset.subtab === name));
+  ['saleComp', 'leaseData', 'record'].forEach(t => {
+    const el = $(`subtab_${t}`);
+    if (el) el.style.display = (t === name) ? 'block' : 'none';
+  });
+  renderInsightsTab(name);
+}
+
+function renderUnderwritingCard() {
+  const p = distressedState.selectedProperty;
+  if (!p) return;
+
+  // Pull current input values from the assumptions panel
+  const a = {
+    downPct: parseFloat($('uw_downPct').value) || 35,
+    rate: parseFloat($('uw_rate').value) || 7.25,
+    termYears: parseFloat($('uw_termYears').value) || 30,
+    vacancyRate: parseFloat($('uw_vacancyRate').value) || 6,
+    maintPct: parseFloat($('uw_maintPct').value) || 8,
+    capexPct: parseFloat($('uw_capexPct').value) || 5,
+    pmPct: parseFloat($('uw_pmPct').value) || 8
+  };
+  // If user hasn't typed a rent/unit yet, default from server precompute
+  if (!$('uw_rentPerUnit').value) {
+    $('uw_rentPerUnit').value = p.underwriting?.rentPerUnit || Math.round((p.estimatedValue || 100000) * 0.008 / Math.max(1, p.units || 1));
+  }
+  const rentPerUnit = parseFloat($('uw_rentPerUnit').value) || 0;
+
+  // Recompute client-side using the shared math
+  const m = computeLocalUnderwriting({
+    price: p.estimatedValue || p.lastSalePrice || 0,
+    units: p.units || 1,
+    rentPerUnit
+  }, a);
+
+  const fmt$ = (v) => isFinite(v) ? '$' + Math.round(v).toLocaleString() : '—';
+  const fmtPct = (v) => isFinite(v) ? (v * 100).toFixed(1) + '%' : '—';
+
+  $('uwGrid').innerHTML = `
+    <div class="uw-item"><span class="lbl">Estimated value</span><span class="val">${fmt$(m.price)}</span></div>
+    <div class="uw-item"><span class="lbl">Cap rate</span><span class="val">${fmtPct(m.capRate)}</span></div>
+    <div class="uw-item"><span class="lbl">Monthly rent</span><span class="val">${fmt$(m.gprMonthly)}</span></div>
+    <div class="uw-item"><span class="lbl">NOI (annual)</span><span class="val">${fmt$(m.noi)}</span></div>
+    <div class="uw-item"><span class="lbl">OpEx (annual)</span><span class="val">${fmt$(m.totalOpex)}</span></div>
+    <div class="uw-item"><span class="lbl">Monthly CF</span><span class="val">${fmt$(m.monthlyCF)}</span></div>
+    <div class="uw-item"><span class="lbl">CoC return</span><span class="val">${fmtPct(m.cocReturn)}</span></div>
+    <div class="uw-item"><span class="lbl">DSCR</span><span class="val">${m.dscr.toFixed(2)}</span></div>
+    <div class="uw-item"><span class="lbl">Target @ 11% cap</span><span class="val">${fmt$(m.targetPriceAtCap)}</span></div>
+    <div class="uw-item"><span class="lbl">5yr ROI</span><span class="val">${fmtPct(m.roi)}</span></div>
+  `;
+}
+
+// Inline mortgage + underwriting math (mirrors lib/financial-calc.mjs exactly)
+function computeLocalUnderwriting(input, a) {
+  const price = Number(input.price) || 0;
+  const units = Math.max(1, Number(input.units) || 1);
+  const rentPerUnit = Number(input.rentPerUnit) || 0;
+  const down = price * (a.downPct / 100);
+  const loan = price - down;
+  const r = (a.rate / 100) / 12, n = a.termYears * 12;
+  const monthlyPI = (loan && n) ? (loan * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1) : 0;
+  const annualDS = monthlyPI * 12;
+  const gprMonthly = rentPerUnit * units;
+  const gprAnnual = gprMonthly * 12;
+  const vacancyLoss = gprAnnual * (a.vacancyRate / 100);
+  const egi = gprAnnual - vacancyLoss;
+  const taxRate = 1.1, insurancePerUnit = 55, utilitiesPerUnit = 50, otherOpex = 150;
+  const taxAnnual = price * (taxRate / 100);
+  const insuranceAnnual = insurancePerUnit * units * 12;
+  const maintAnnual = egi * (a.maintPct / 100);
+  const capexAnnual = egi * (a.capexPct / 100);
+  const pmAnnual = egi * (a.pmPct / 100);
+  const utilitiesAnnual = utilitiesPerUnit * units * 12;
+  const otherOpexAnnual = otherOpex * 12;
+  const totalOpex = taxAnnual + insuranceAnnual + maintAnnual + capexAnnual + pmAnnual + utilitiesAnnual + otherOpexAnnual;
+  const noi = egi - totalOpex;
+  const annualCF = noi - annualDS;
+  const capRate = price > 0 ? noi / price : 0;
+  const cashIn = down;
+  const cocReturn = cashIn > 0 ? annualCF / cashIn : 0;
+  const dscr = annualDS > 0 ? noi / annualDS : 0;
+  const targetPriceAtCap = noi > 0 ? noi / 0.11 : 0;
+  // Simplified 5yr ROI
+  const years = 5, rentGrowth = 3, opexGrowth = 2, appreciation = 3;
+  let cumCF = 0;
+  for (let y = 1; y <= years; y++) {
+    const yrEgi = egi * Math.pow(1 + rentGrowth / 100, y - 1);
+    const yrOpex = totalOpex * Math.pow(1 + opexGrowth / 100, y - 1);
+    cumCF += (yrEgi - yrOpex) - annualDS;
+  }
+  // approx remaining principal at month 60
+  const balEnd = (loan && n) ? (loan * Math.pow(1 + r, 60) - monthlyPI * ((Math.pow(1 + r, 60) - 1) / r)) : 0;
+  const principalPaid = loan - balEnd;
+  const apprGain = price * (Math.pow(1 + appreciation / 100, years) - 1);
+  const roi = cashIn > 0 ? (cumCF + principalPaid + apprGain) / cashIn : 0;
+  return { price, units, gprMonthly, egi, totalOpex, noi, monthlyPI, annualDS, annualCF, monthlyCF: annualCF / 12, capRate, cocReturn, dscr, targetPriceAtCap, roi };
+}
+
+function renderInsightsTab(name) {
+  const p = distressedState.selectedProperty;
+  if (!p) return;
+  if (name === 'saleComp') {
+    const sc = p.saleComp || {};
+    $('subtab_saleComp').innerHTML = `
+      <div class="record-section">
+        <h4>Sale History</h4>
+        <div class="rec-row"><span class="lbl">Last sale price</span><span class="val">${sc.lastSalePrice ? '$' + sc.lastSalePrice.toLocaleString() : '—'}</span></div>
+        <div class="rec-row"><span class="lbl">Last sale date</span><span class="val">${sc.lastSaleDate || '—'}</span></div>
+        ${(sc.priceHistory || []).slice(0, 10).map(ev => `
+          <div class="rec-row"><span class="lbl">${ev.date} — ${ev.event}</span><span class="val">${ev.price ? '$' + ev.price.toLocaleString() : '—'}</span></div>
+        `).join('')}
+      </div>
+      <div class="record-section">
+        <h4>Nearby Comparable Sales</h4>
+        ${(sc.nearbyComps || []).length === 0
+          ? '<div class="rec-row"><span class="lbl">No comp data available</span></div>'
+          : (sc.nearbyComps || []).slice(0, 8).map(c => `<div class="rec-row"><span class="lbl">${c.address || ''}</span><span class="val">${c.price ? '$' + c.price.toLocaleString() : '—'}</span></div>`).join('')}
+      </div>`;
+  } else if (name === 'leaseData') {
+    const ld = p.leaseData || {};
+    $('subtab_leaseData').innerHTML = `
+      <div class="record-section">
+        <h4>Rental Market</h4>
+        <div class="rec-row"><span class="lbl">Median market rent</span><span class="val">${ld.marketMedianRent ? '$' + ld.marketMedianRent.toLocaleString() + '/mo' : '—'}</span></div>
+        <div class="rec-row"><span class="lbl">Last leased</span><span class="val">${ld.lastLeasedDate || '—'}</span></div>
+        <div class="rec-row"><span class="lbl">Last known rent</span><span class="val">${ld.lastKnownRent ? '$' + ld.lastKnownRent.toLocaleString() : '—'}</span></div>
+        <div class="rec-row"><span class="lbl">Source</span><span class="val">${ld.marketMedianSource || '—'}</span></div>
+      </div>
+      <div class="record-section" style="color:var(--muted);">
+        Owner contact info (phone/email) and Gmail integration: <b>coming in v2</b>
+      </div>`;
+  } else if (name === 'record') {
+    const r = p.record || {};
+    const o = r.owner || {}, m = r.mortgage || {}, d = r.distress || {}, t = r.tax || {}, z = r.zoning;
+    $('subtab_record').innerHTML = `
+      <div class="record-section">
+        <h4>Owner</h4>
+        <div class="rec-row"><span class="lbl">Name</span><span class="val">${o.name || '—'}</span></div>
+        <div class="rec-row"><span class="lbl">Mailing address</span><span class="val">${o.mailingAddress || '—'}</span></div>
+        <div class="rec-row"><span class="lbl">Owner-occupied</span><span class="val">${o.ownerOccupied ? 'Yes' : 'No'}</span></div>
+      </div>
+      <div class="record-section">
+        <h4>Mortgage</h4>
+        <div class="rec-row"><span class="lbl">Lender</span><span class="val">${m.lender || '—'}</span></div>
+        <div class="rec-row"><span class="lbl">Original amount</span><span class="val">${m.originalAmount ? '$' + m.originalAmount.toLocaleString() : '—'}</span></div>
+        <div class="rec-row"><span class="lbl">Origination date</span><span class="val">${m.originationDate || '—'}</span></div>
+        <div class="rec-row"><span class="lbl">Estimated balance</span><span class="val">${m.estimatedBalance ? '$' + m.estimatedBalance.toLocaleString() : '—'}</span></div>
+        <div class="rec-row"><span class="lbl">Loan type</span><span class="val">${m.loanType || '—'}</span></div>
+      </div>
+      <div class="record-section">
+        <h4>Distress Filings</h4>
+        <div class="rec-row"><span class="lbl">Status</span><span class="val">${d.status || 'NONE'}</span></div>
+        ${d.nodDate ? `<div class="rec-row"><span class="lbl">NOD date</span><span class="val">${d.nodDate}</span></div>` : ''}
+        ${d.auctionDate ? `<div class="rec-row"><span class="lbl">Auction date</span><span class="val">${d.auctionDate}</span></div>` : ''}
+        ${d.defaultAmount ? `<div class="rec-row"><span class="lbl">Default amount</span><span class="val">$${d.defaultAmount.toLocaleString()}</span></div>` : ''}
+        ${d.trustee ? `<div class="rec-row"><span class="lbl">Trustee</span><span class="val">${d.trustee}</span></div>` : ''}
+        ${d.verifyUrl ? `<div class="rec-row"><span class="lbl">Verify at</span><a href="${d.verifyUrl}" target="_blank">${d.verifyUrl}</a></div>` : ''}
+      </div>
+      <div class="record-section">
+        <h4>Tax</h4>
+        <div class="rec-row"><span class="lbl">Assessed value</span><span class="val">${t.assessedValue ? '$' + t.assessedValue.toLocaleString() : '—'}</span></div>
+        <div class="rec-row"><span class="lbl">Annual tax</span><span class="val">${t.annualTax ? '$' + t.annualTax.toLocaleString() : '—'}</span></div>
+        <div class="rec-row"><span class="lbl">Tax rate</span><span class="val">${t.taxRate ? t.taxRate.toFixed(2) + '%' : '—'}</span></div>
+        <div class="rec-row"><span class="lbl">Delinquent years</span><span class="val">${t.delinquentYears || 0}</span></div>
+      </div>
+      ${z ? `
+      <div class="record-section">
+        <h4>Zoning (Hawaii)</h4>
+        <div class="rec-row"><span class="lbl">Zone</span><span class="val">${z.zone}</span></div>
+        <div class="rec-row"><span class="lbl">Allowed use</span><span class="val">${z.allowedUse}</span></div>
+        <div class="rec-row"><span class="lbl">STR legal</span><span class="val" style="color:${z.strLegal ? 'var(--green)' : 'var(--red)'}">${z.strLegal ? '✓ Yes' : '✗ No'}</span></div>
+        <div class="rec-row"><span class="lbl">Verify</span><a href="${z.sourceUrl}" target="_blank">County GIS ↗</a></div>
+        <div class="rec-row" style="color:var(--muted); font-size:11px;">${z.note || ''}</div>
+      </div>` : ''}
+      <div class="record-section" style="background:rgba(245,158,11,0.08); padding:10px; border-radius:6px;">
+        <h4 style="border:none; padding:0; margin:0 0 6px;">⚠ Data accuracy disclaimer</h4>
+        <div style="font-size:11px; color:var(--muted);">Sources: ${(p.sources || []).join(', ') || '—'}. Verify before relying on this data for financial decisions.</div>
+      </div>`;
+  }
+}
+
+// Live-recompute underwriting card on assumption edits
+['downPct', 'rate', 'termYears', 'vacancyRate', 'maintPct', 'capexPct', 'pmPct', 'rentPerUnit'].forEach(f => {
+  const el = $(`uw_${f}`);
+  if (el) el.addEventListener('input', renderUnderwritingCard);
+});
+
+// Pill click-state sync
+document.querySelectorAll('.distressed-filterbar input[type="checkbox"]').forEach(cb => {
+  cb.addEventListener('change', readDistressedFilters);
+});
+
+// Hook into the existing switchTab to lazy-init the map when the user first lands on Distressed.
+const _origSwitchTab = window.switchTab;
+window.switchTab = function (name) {
+  _origSwitchTab(name);
+  if (name === 'distressed') {
+    initDistressedMap().catch(e => console.warn('Map init failed:', e));
+    refreshSavedSearchDropdown();
+    readDistressedFilters();
+  }
+};
+
+// Restore saved tab if it was Distressed
+if (localStorage.getItem('activeTab') === 'distressed') {
+  switchTab('distressed');
+}
+
+// Initial pill state
+readDistressedFilters();
+refreshSavedSearchDropdown();
+
+// ============================================================
+// Live autocomplete for the Distressed location input
+// Reuses the existing /api/autocomplete endpoint (Nominatim).
+// Picking a suggestion immediately fires distressedSearch().
+// ============================================================
+(function initDistressedAutocomplete() {
+  const input = $('ds_location');
+  const dropdown = $('ds_locationDropdown');
+  if (!input || !dropdown) return;
+  let debounceTimer = null;
+  let activeIdx = -1;
+  let items = [];
+
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    const q = input.value.trim();
+    if (q.length < 2) { hide(); return; }
+    debounceTimer = setTimeout(() => fetchSug(q), 220);
+  });
+  input.addEventListener('keydown', (e) => {
+    if (!dropdown.classList.contains('visible')) {
+      if (e.key === 'Enter') { e.preventDefault(); distressedSearch(); }
+      return;
+    }
+    if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx = Math.min(activeIdx + 1, items.length - 1); hl(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); hl(); }
+    else if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); sel(activeIdx); }
+    else if (e.key === 'Enter') { e.preventDefault(); hide(); distressedSearch(); }
+    else if (e.key === 'Escape') hide();
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#tab-distressed .autocomplete-wrapper')) hide();
+  });
+
+  async function fetchSug(q) {
+    try {
+      const r = await fetch(`/api/autocomplete?q=${encodeURIComponent(q)}`);
+      const d = await r.json();
+      if (!Array.isArray(d) || !d.length) { hide(); return; }
+      items = d;
+      render();
+    } catch { hide(); }
+  }
+  function render() {
+    activeIdx = -1;
+    dropdown.innerHTML = items.map((it, i) => {
+      const subtitle = it.city && it.state
+        ? `<span class="ac-secondary">${it.city}${it.state ? ', ' + it.state : ''}${it.postcode ? ' ' + it.postcode : ''}</span>`
+        : '';
+      return `<div class="autocomplete-item" data-idx="${i}">${it.address}${subtitle}</div>`;
+    }).join('');
+    dropdown.classList.add('visible');
+    dropdown.querySelectorAll('.autocomplete-item').forEach(el => {
+      el.addEventListener('mouseenter', () => { activeIdx = parseInt(el.dataset.idx); hl(); });
+      el.addEventListener('click', () => sel(parseInt(el.dataset.idx)));
+    });
+  }
+  function hl() {
+    dropdown.querySelectorAll('.autocomplete-item').forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+  }
+  function sel(i) {
+    const it = items[i]; if (!it) return;
+    // Prefer city+state for searches, full address for direct lookups
+    input.value = it.address;
+    distressedState._selectedCoords = (it.lat && it.lng) ? { lat: it.lat, lng: it.lng } : null;
+    hide();
+    distressedSearch();  // ← real-time auto-search
+  }
+  function hide() {
+    dropdown.classList.remove('visible');
+    dropdown.innerHTML = '';
+    items = []; activeIdx = -1;
+  }
+})();
+
 </script>
 
 </body>

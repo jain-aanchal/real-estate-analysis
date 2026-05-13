@@ -53,6 +53,9 @@ const RENTCAST_API_KEY = process.env.RENTCAST_API_KEY;
 const RENTCAST_BASE = 'https://api.rentcast.io/v1';
 const AIRROI_API_KEY = process.env.AIRROI_API_KEY;
 const AIRROI_BASE = 'https://api.airroi.com';
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+const PROPERTYRADAR_API_KEY = process.env.PROPERTYRADAR_API_KEY;
+const PROPERTYRADAR_BASE = 'https://api.propertyradar.com/v1';
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -65,11 +68,21 @@ app.get('/api/health', (req, res) => {
     airdna_configured: !!AIRDNA_API_KEY,
     rentcast_configured: !!RENTCAST_API_KEY,
     airroi_configured: !!AIRROI_API_KEY,
+    google_maps_configured: !!GOOGLE_MAPS_API_KEY,
+    propertyradar_configured: !!PROPERTYRADAR_API_KEY,
     redfin_available: true,
     scraper_installed: playwrightInstalled,
     zillow_available: playwrightInstalled,
     base: AIRDNA_BASE
   });
+});
+
+// --- Maps config (which provider + key for the client to use) ---
+app.get('/api/maps/config', (req, res) => {
+  if (GOOGLE_MAPS_API_KEY) {
+    return res.json({ provider: 'google', apiKey: GOOGLE_MAPS_API_KEY });
+  }
+  res.json({ provider: 'osm' });
 });
 
 // --- Scraper status: check if Playwright module + browser are available ---
@@ -359,18 +372,22 @@ app.get('/api/autocomplete', async (req, res) => {
       .filter(item => item.display_name && item.address)
       .map(item => {
         const a = item.address;
-        // Build a clean US address string
+        // Build a clean US address string. Now handles city, zip, state, and full addresses.
         const parts = [];
         if (a.house_number && a.road) parts.push(`${a.house_number} ${a.road}`);
         else if (a.road) parts.push(a.road);
-        if (a.city || a.town || a.village) parts.push(a.city || a.town || a.village);
+        const city = a.city || a.town || a.village || a.hamlet || a.suburb || a.county;
+        if (city) parts.push(city);
         if (a.state) parts.push(a.state);
         if (a.postcode) parts.push(a.postcode);
-        const address = parts.length >= 2 ? parts.join(', ') : item.display_name.split(',').slice(0, 4).join(',');
+        const address = parts.length >= 2 ? parts.join(', ') : item.display_name.split(',').slice(0, 4).join(', ');
         return {
           address,
           fullDisplay: item.display_name,
-          type: item.type || item.class || ''
+          type: item.type || item.class || '',
+          lat: parseFloat(item.lat) || 0,
+          lng: parseFloat(item.lon) || 0,
+          city, state: a.state, postcode: a.postcode
         };
       });
 
@@ -1164,6 +1181,443 @@ app.post('/api/ltr/mortgage-record', async (req, res) => {
 });
 
 // --- Static files ---
+// ============================================================================
+// Distressed Properties — aggregation + Insights endpoints
+// ============================================================================
+import { computeUnderwriting, DEFAULT_ASSUMPTIONS } from './lib/financial-calc.mjs';
+import { lookupCounty } from './census-geocoder.mjs';
+import { scrapeRecorder } from './county-recorder-scraper.mjs';
+import { scrapeAuctions } from './auction-scraper.mjs';
+import { scrapeDwellsy } from './dwellsy-scraper.mjs';
+import { lookupZoningHI } from './zoning-hawaii.mjs';
+import { saveSearch as drvSaveSearch, listSearches as drvListSearches, deleteSearch as drvDeleteSearch } from './saved-search-drive.mjs';
+import { propertyRadarSearch, propertyRadarProperty } from './propertyradar-client.mjs';
+
+import { createHash } from 'crypto';
+import { mkdirSync, writeFileSync, readFileSync as fsReadFileSync, statSync, readdirSync } from 'fs';
+
+const CACHE_DIR = join(__dirname, 'tmp', 'cache');
+try { mkdirSync(CACHE_DIR, { recursive: true }); } catch {}
+
+function cacheGet(key, maxAgeSec) {
+  try {
+    const p = join(CACHE_DIR, key + '.json');
+    const st = statSync(p);
+    if ((Date.now() - st.mtimeMs) / 1000 > maxAgeSec) return null;
+    return JSON.parse(fsReadFileSync(p, 'utf8'));
+  } catch { return null; }
+}
+function cacheSet(key, value) {
+  try { writeFileSync(join(CACHE_DIR, key + '.json'), JSON.stringify(value)); } catch {}
+}
+function hashKey(o) {
+  return createHash('sha256').update(JSON.stringify(o)).digest('hex').slice(0, 24);
+}
+
+// Sample data generator — drives Phase 1 UI before scrapers come online.
+// Also used as a graceful fallback when RentCast + scrapers all fail.
+async function sampleDistressed(location, cap = 10) {
+  // 1) Geocode via Nominatim (handles city, state, zip, AND full addresses).
+  //    Census geocoder only handles full street addresses, so it's not a fit
+  //    for the common "city, state" search query.
+  let loc = null;
+  try {
+    const u = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&addressdetails=1&countrycodes=us&limit=1`;
+    const r = await fetch(u, { headers: { 'User-Agent': 'RealEstateAnalyzer/1.0', 'Accept': 'application/json' } });
+    if (r.ok) {
+      const arr = await r.json();
+      const it = arr?.[0];
+      if (it) {
+        const a = it.address || {};
+        loc = {
+          city: a.city || a.town || a.village || a.county || (location.split(',')[0] || '').trim(),
+          state: a.state || '',
+          stateCode: (a['ISO3166-2-lvl4'] || '').replace(/^US-/, ''),
+          lat: parseFloat(it.lat) || 0,
+          lng: parseFloat(it.lon) || 0
+        };
+      }
+    }
+  } catch { /* tolerated */ }
+  // 2) Fallback parse if geocoder unavailable.
+  if (!loc || !loc.lat) {
+    const m = (location || '').match(/^\s*([\w\s.'-]+?)\s*,\s*([A-Z]{2})/i);
+    if (m) {
+      loc = { city: m[1].trim(), state: '', stateCode: m[2].toUpperCase(), lat: 39.5, lng: -98.35 };
+    } else {
+      loc = { city: location || 'Sample City', state: '', stateCode: 'US', lat: 39.5, lng: -98.35 };
+    }
+  }
+  // Normalize display state code (2-letter)
+  const stateForDisplay = loc.stateCode || loc.state || '';
+  const statuses = ['nod', 'auction', 'tax_delinquent', 'nod', 'on_market', 'off_market'];
+  const flagsForStatus = {
+    nod: ['NOD'], auction: ['Auction'], tax_delinquent: ['Tax lien'],
+    on_market: [], off_market: ['Off-market']
+  };
+
+  const out = [];
+  for (let i = 0; i < cap; i++) {
+    const units = 1 + Math.floor(Math.random() * 6);
+    const bedrooms = units * (2 + Math.floor(Math.random() * 2));
+    const bathrooms = units * (1 + Math.floor(Math.random() * 2));
+    const yearBuilt = 1900 + Math.floor(Math.random() * 110);
+    const price = 80_000 + Math.floor(Math.random() * 900_000);
+    const status = statuses[i % statuses.length];
+    const rent = 800 + Math.floor(Math.random() * 1200);
+
+    const uw = computeUnderwriting(
+      { price, units, rentPerUnit: rent },
+      { ...DEFAULT_ASSUMPTIONS }
+    );
+
+    out.push({
+      id: `sample-${loc.city.replace(/\s/g, '')}-${i}`,
+      address: `${1000 + i * 23} ${['Oak', 'Main', 'Elm', 'Maple'][i % 4]} St, ${loc.city}, ${stateForDisplay}`,
+      lat: loc.lat + (Math.random() - 0.5) * 0.08,
+      lng: loc.lng + (Math.random() - 0.5) * 0.08,
+      propertyType: units > 1 ? 'multi-family' : 'single-family',
+      units, bedrooms, bathrooms, yearBuilt,
+      lastSalePrice: Math.round(price * (0.5 + Math.random() * 0.3)),
+      lastSaleDate: `${2005 + Math.floor(Math.random() * 18)}-0${1 + Math.floor(Math.random() * 9)}-15`,
+      estimatedValue: price,
+      ownerName: ['Smith Family Trust', 'John Doe', 'Jane Doe LLC', 'Acme Holdings LP'][i % 4],
+      ownerOccupied: i % 5 === 0,
+      status,
+      flags: [...flagsForStatus[status]],
+      capRate: uw.capRate,
+      noi: uw.noi,
+      _isSample: true
+    });
+  }
+  return out;
+}
+
+// Aggregator: tries PropertyRadar → RentCast → sample fallback
+async function aggregateDistressedSearch({ location, filters, cap }) {
+  // PropertyRadar (env-gated, paid)
+  if (PROPERTYRADAR_API_KEY) {
+    try {
+      const r = await propertyRadarSearch({ apiKey: PROPERTYRADAR_API_KEY, base: PROPERTYRADAR_BASE, location, filters, cap });
+      if (r && r.length) return { results: r, source: 'propertyradar' };
+    } catch (e) {
+      console.warn('[distressed] PropertyRadar failed:', e.message);
+    }
+  }
+  // RentCast: pull properties in zip / city, then filter
+  // (Free tier is restrictive; if we don't have a hit, fall back to sample.)
+  if (RENTCAST_API_KEY) {
+    try {
+      const url = `${RENTCAST_BASE}/properties?address=${encodeURIComponent(location)}&limit=${cap}`;
+      const r = await fetch(url, { headers: { 'X-Api-Key': RENTCAST_API_KEY, 'Accept': 'application/json' } });
+      const data = await r.json();
+      if (r.ok && Array.isArray(data) && data.length) {
+        const results = data.slice(0, cap).map((p, idx) => ({
+          id: p.id || `rc-${idx}`,
+          address: p.formattedAddress || p.address || '',
+          lat: Number(p.latitude) || 0,
+          lng: Number(p.longitude) || 0,
+          propertyType: (p.propertyType || '').toLowerCase().includes('multi') ? 'multi-family' : 'single-family',
+          units: Number(p.unitCount || p.numUnits) || 1,
+          bedrooms: Number(p.bedrooms) || 0,
+          bathrooms: Number(p.bathrooms) || 0,
+          yearBuilt: Number(p.yearBuilt) || 0,
+          lastSalePrice: Number(p.lastSalePrice) || 0,
+          lastSaleDate: p.lastSaleDate || '',
+          estimatedValue: Number(p.lastSalePrice) || 0,
+          ownerName: p.owner?.names?.[0] || p.owner?.name || '',
+          ownerOccupied: !!p.ownerOccupied,
+          status: 'off_market',
+          flags: [],
+          capRate: 0, noi: 0,
+          _isSample: false
+        }));
+        return { results, source: 'rentcast' };
+      }
+    } catch (e) {
+      console.warn('[distressed] RentCast failed:', e.message);
+    }
+  }
+  // Auction.com — REAL distressed data via Playwright scrape of public listings.
+  // This is the primary free source for live distressed inventory by city/state.
+  const playwrightInstalled = existsSync(join(__dirname, 'node_modules', 'playwright'));
+  if (playwrightInstalled) {
+    try {
+      // Parse city/state/zip from location
+      const m = (location || '').match(/^\s*([\w\s.'-]+?)\s*,\s*([A-Z]{2}|[A-Za-z ]+)/i);
+      const zipMatch = (location || '').match(/^\s*(\d{5})\s*$/);
+      const auc = await scrapeAuctions({
+        city: m ? m[1].trim() : null,
+        state: m ? m[2].trim() : (!zipMatch ? location : null),
+        zip: zipMatch ? zipMatch[1] : null,
+        cap
+      });
+      if (auc.listings && auc.listings.length) {
+        // Geocode each in parallel (limited concurrency) for map pins
+        const results = auc.listings.map((L, idx) => ({
+          id: `ac-${idx}-${L.address.replace(/\s/g, '').slice(0, 20)}`,
+          address: L.address,
+          lat: 0, lng: 0,  // Will be geocoded lazily client-side or by /property endpoint
+          propertyType: L.bedrooms > 4 ? 'multi-family' : 'single-family',
+          units: 1,
+          bedrooms: L.bedrooms || 0,
+          bathrooms: L.bathrooms || 0,
+          yearBuilt: 0,
+          lastSalePrice: 0,
+          lastSaleDate: '',
+          estimatedValue: L.price || 0,
+          ownerName: '',
+          ownerOccupied: false,
+          status: L.status || 'auction',
+          flags: L.flags || [],
+          endsIn: L.endsIn,
+          detailUrl: L.detailUrl,
+          sqft: L.sqft || 0,
+          capRate: 0, noi: 0,
+          _isSample: false
+        }));
+        // Light geocoding pass — use Nominatim for the first N listings to populate map pins
+        await geocodeResultsLazy(results, Math.min(30, results.length));
+        return { results, source: 'auction.com', totalAvailable: auc.totalAvailable };
+      }
+    } catch (e) {
+      console.warn('[distressed] Auction.com scrape failed:', e.message);
+    }
+  }
+
+  // Sample fallback (only reached when scrapers can't help)
+  return { results: await sampleDistressed(location, cap), source: 'sample' };
+}
+
+// Geocode N results in parallel (Nominatim, free, no key).
+// Respects Nominatim's 1 req/sec policy by chunking with small delays.
+async function geocodeResultsLazy(results, n) {
+  for (let i = 0; i < n; i++) {
+    const r = results[i];
+    if (r.lat && r.lng) continue;
+    try {
+      const u = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(r.address)}&format=json&countrycodes=us&limit=1`;
+      const resp = await fetch(u, { headers: { 'User-Agent': 'RealEstateAnalyzer/1.0' } });
+      if (resp.ok) {
+        const arr = await resp.json();
+        if (arr?.[0]) {
+          r.lat = parseFloat(arr[0].lat) || 0;
+          r.lng = parseFloat(arr[0].lon) || 0;
+        }
+      }
+    } catch { /* tolerated */ }
+    // Nominatim usage policy: ≤ 1 req/sec
+    await new Promise(res => setTimeout(res, 80));
+  }
+}
+
+// GET /api/distressed/search?location=...&cap=...
+app.get('/api/distressed/search', async (req, res) => {
+  const location = (req.query.location || '').trim();
+  if (!location) return res.status(400).json({ error: 'location is required' });
+  const cap = Math.min(parseInt(req.query.cap) || 500, 1000);
+
+  // Parse filters
+  let filters = {};
+  try { filters = JSON.parse(req.query.filters || '{}'); } catch {}
+
+  const cacheKey = `ds-search-${hashKey({ location, filters, cap })}`;
+  const cached = cacheGet(cacheKey, 60 * 60); // 1hr
+  if (cached) {
+    return res.json({ ...cached, cached: true });
+  }
+
+  console.log(`[distressed/search] "${location}" cap=${cap}`);
+  const { results, source } = await aggregateDistressedSearch({ location, filters, cap });
+
+  // Apply client-style filters server-side
+  let filtered = results;
+  if (filters.types && filters.types.length) {
+    filtered = filtered.filter(r => filters.types.includes(r.propertyType));
+  }
+  if (filters.statuses && filters.statuses.length) {
+    filtered = filtered.filter(r => filters.statuses.includes(r.status));
+  }
+  if (filters.priceMin) filtered = filtered.filter(r => r.estimatedValue >= filters.priceMin);
+  if (filters.priceMax) filtered = filtered.filter(r => r.estimatedValue <= filters.priceMax);
+  if (filters.unitsMin) filtered = filtered.filter(r => r.units >= filters.unitsMin);
+  if (filters.unitsMax) filtered = filtered.filter(r => r.units <= filters.unitsMax);
+  if (filters.brMin) filtered = filtered.filter(r => r.bedrooms >= filters.brMin);
+  if (filters.baMin) filtered = filtered.filter(r => r.bathrooms >= filters.baMin);
+  if (filters.yearBefore) filtered = filtered.filter(r => r.yearBuilt > 0 && r.yearBuilt <= filters.yearBefore);
+
+  // Sort by distress severity then ascending price
+  const sevRank = { auction: 0, nod: 1, tax_delinquent: 2, in_contract: 3, on_market: 4, off_market: 5 };
+  filtered.sort((a, b) => (sevRank[a.status] ?? 9) - (sevRank[b.status] ?? 9) || a.estimatedValue - b.estimatedValue);
+
+  const payload = { source, results: filtered, count: filtered.length, totalSeen: results.length };
+  cacheSet(cacheKey, payload);
+  res.json(payload);
+});
+
+// POST /api/distressed/property — full Insights record + underwriting precompute
+app.post('/api/distressed/property', async (req, res) => {
+  const { address } = req.body || {};
+  if (!address) return res.status(400).json({ error: 'address is required' });
+  const cacheKey = `ds-prop-${hashKey({ address })}`;
+  const cached = cacheGet(cacheKey, 24 * 60 * 60); // 24hr
+  if (cached) return res.json({ ...cached, cached: true });
+
+  const out = {
+    address,
+    saleComp: { lastSalePrice: 0, lastSaleDate: '', priceHistory: [], nearbyComps: [] },
+    leaseData: { marketMedianRent: 0, lastLeasedDate: '', lastKnownRent: 0 },
+    record: { owner: {}, mortgage: {}, distress: { status: 'NONE' }, tax: {} },
+    sources: []
+  };
+
+  // PropertyRadar (paid) first
+  if (PROPERTYRADAR_API_KEY) {
+    try {
+      const pr = await propertyRadarProperty({ apiKey: PROPERTYRADAR_API_KEY, base: PROPERTYRADAR_BASE, address });
+      if (pr) Object.assign(out, pr);
+      out.sources.push('propertyradar');
+    } catch (e) {
+      console.warn('[distressed/property] PropertyRadar failed:', e.message);
+    }
+  }
+
+  // RentCast for owner / sale / tax baseline
+  if (RENTCAST_API_KEY && !out.record.owner.name) {
+    try {
+      const url = `${RENTCAST_BASE}/properties?address=${encodeURIComponent(address)}`;
+      const r = await fetch(url, { headers: { 'X-Api-Key': RENTCAST_API_KEY, 'Accept': 'application/json' } });
+      const data = await r.json();
+      const p = Array.isArray(data) ? data[0] : data;
+      if (r.ok && p) {
+        out.lat = Number(p.latitude) || 0;
+        out.lng = Number(p.longitude) || 0;
+        out.propertyType = (p.propertyType || '').toLowerCase().includes('multi') ? 'multi-family' : 'single-family';
+        out.units = Number(p.unitCount || p.numUnits) || 1;
+        out.bedrooms = Number(p.bedrooms) || 0;
+        out.bathrooms = Number(p.bathrooms) || 0;
+        out.yearBuilt = Number(p.yearBuilt) || 0;
+        out.sqft = Number(p.squareFootage) || 0;
+        out.saleComp.lastSalePrice = Number(p.lastSalePrice) || 0;
+        out.saleComp.lastSaleDate = p.lastSaleDate || '';
+        out.record.owner = {
+          name: p.owner?.names?.[0] || p.owner?.name || '',
+          mailingAddress: p.owner?.mailingAddress || '',
+          ownerOccupied: !!p.ownerOccupied
+        };
+        out.record.tax = {
+          assessedValue: Number(p.taxAssessments?.[Object.keys(p.taxAssessments || {}).slice(-1)[0]]?.value) || 0,
+          annualTax: 0,
+          taxRate: 0,
+          delinquentYears: 0
+        };
+        out.sources.push('rentcast');
+      }
+    } catch (e) {
+      console.warn('[distressed/property] RentCast failed:', e.message);
+    }
+  }
+
+  // County / state for distress filings
+  let stateCode = '';
+  let countyName = '';
+  try {
+    const geo = await lookupCounty(address);
+    if (geo) {
+      out.county = geo.county;
+      out.stateFIPS = geo.stateFIPS;
+      stateCode = geo.state;
+      countyName = geo.county;
+      out.sources.push('census');
+    }
+  } catch (e) { /* tolerated */ }
+
+  // Distress filings via county recorder (best-effort)
+  const playwrightInstalled = existsSync(join(__dirname, 'node_modules', 'playwright'));
+  if (playwrightInstalled && stateCode) {
+    try {
+      const fil = await scrapeRecorder({ address, county: countyName, state: stateCode });
+      if (fil && fil.distress) {
+        out.record.distress = fil.distress;
+        if (fil.mortgage) out.record.mortgage = fil.mortgage;
+        out.sources.push('county-recorder');
+      }
+    } catch (e) {
+      console.warn('[distressed/property] recorder scrape failed:', e.message);
+    }
+  }
+
+  // HI zoning
+  if (stateCode === 'HI') {
+    try {
+      const z = await lookupZoningHI({ address, lat: out.lat, lng: out.lng });
+      if (z) {
+        out.record.zoning = z;
+        out.sources.push('maui-gis');
+      }
+    } catch (e) { /* tolerated */ }
+  }
+
+  // Compute underwriting from whatever we have
+  const price = out.estimatedValue || out.saleComp.lastSalePrice || 0;
+  if (price > 0) {
+    const rentPerUnit = out.leaseData.marketMedianRent
+      || Math.round(price * 0.008 / Math.max(1, out.units || 1));   // 0.8% rule fallback
+    out.underwriting = computeUnderwriting(
+      { price, units: out.units || 1, rentPerUnit },
+      { ...DEFAULT_ASSUMPTIONS }
+    );
+  }
+
+  cacheSet(cacheKey, out);
+  res.json(out);
+});
+
+// POST /api/distress/scrape — direct scraper invocation
+app.post('/api/distress/scrape', async (req, res) => {
+  const { address, county, state } = req.body || {};
+  if (!address || !state) return res.status(400).json({ error: 'address and state required' });
+  try {
+    const r = await scrapeRecorder({ address, county, state });
+    res.json(r);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/auction/scrape
+app.post('/api/auction/scrape', async (req, res) => {
+  const { city, state, zip } = req.body || {};
+  try {
+    const r = await scrapeAuctions({ city, state, zip });
+    res.json(r);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/zoning/hawaii
+app.post('/api/zoning/hawaii', async (req, res) => {
+  const { address, lat, lng } = req.body || {};
+  if (!address) return res.status(400).json({ error: 'address required' });
+  try {
+    const z = await lookupZoningHI({ address, lat, lng });
+    res.json(z || { error: 'no zoning found' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Saved-search endpoints — wrap Drive client (works without token via localStorage fallback in client)
+app.post('/api/saved-search/save', async (req, res) => {
+  // The actual Drive call is client-side (the user owns the OAuth token).
+  // This endpoint exists for the localStorage-only fallback path.
+  const { name, filters, location } = req.body || {};
+  if (!name || !filters) return res.status(400).json({ error: 'name + filters required' });
+  // No-op server side for v1; client persists. Reserved for future server-stored option.
+  res.json({ ok: true, name });
+});
+
 app.use(express.static(__dirname));
 
 // --- Start ---

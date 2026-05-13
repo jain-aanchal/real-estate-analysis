@@ -1,6 +1,10 @@
 # Investment Analyzer
 
-Standalone web app for analyzing short-term rental (STR) property investments. Mirrors the logic in `STR Investment Analysis.xlsx` with live calculations and an offer-price optimizer.
+Standalone web app for analyzing real-estate investments. Three tabs:
+
+1. **🏖️ Short-Term Rental (STR)** — vacation-rental underwriting with Low/Mid/High scenarios, AirDNA Rentalizer PDF import, AirROI / AirDNA / Airbnb comp pulls, target offer-price at 11% cap rate
+2. **🏢 Multi-Family Long-Term Rental (LTR)** — residential/commercial loan logic (>4 units → prime+2% commercial), rent comps, full-history sales pulls, county-recorder deep-links, NOI / CoC / DSCR / 5-yr ROI / target buy price at 15% cap
+3. **🏚️ Distressed Properties** *(new)* — searches off-market and distressed inventory (pre-foreclosure / auction / tax-delinquent) across all 50 US states, with map view, full Insights drawer (Sale Comp / Lease Data / Record), inline underwriting card with live-edit assumptions, Hawaii zoning lookup, optional PropertyRadar feed, Google Drive saved searches
 
 ## Features
 
@@ -183,6 +187,64 @@ node scraper.mjs --address "Austin, TX" --count 12
 # Outputs a JSON array of listings to stdout
 ```
 
+## 🏚️ Distressed Properties Tab
+
+The Distressed tab aggregates off-market and distressed-property inventory across all 50 US states from public records and free data sources, with an optional paid PropertyRadar upgrade.
+
+### What it does
+
+- **Search by city / state / zip / address** — returns up to 1,000 results per query
+- **Filter by**: property type (multi/single-family, land, mixed-use), distress status (auction, NOD, tax-delinquent, on-market, off-market, in-contract), price range, unit count, BR/BA, year built
+- **Map view** — Google Maps (when `GOOGLE_MAPS_API_KEY` is set) with OpenStreetMap/Leaflet auto-fallback otherwise. Pins colored by distress status.
+- **Insights drawer** (click any row) — three sub-tabs:
+  - **Sale Comp** — last sale, full price history
+  - **Lease Data** — median market rent, last known tenant rent (Dwellsy)
+  - **Record** — owner name, mortgage details, distress filings (NOD/auction/tax), tax info, **Hawaii zoning + STR-legality flag**
+- **📊 Underwriting card** — top of every Insights panel. Computes cap rate, NOI, OpEx, CoC, DSCR, 5-yr ROI, and target buy price @ 11% cap using the same math as the LTR tab. Live-edit assumptions (down %, rate, term, vacancy, maint, capex, PM, rent/unit) in-place.
+- **CSV export** of selected or all results
+- **Save Search** to Google Drive (uses the same OAuth flow as the existing Save-Analysis modal). Falls back to localStorage if not signed in.
+
+### Data sources
+
+| Source | Cost | Coverage | Method |
+|---|---|---|---|
+| **RentCast** `/properties` | existing key | All 50 states | REST — baseline parcel/owner/sale/tax |
+| **County recorder scrape** via NETR Online + 10 priority state handlers (CA, TX, FL, NY, IL, GA, OH, MI, AZ, HI) | $0 | National (varies) | Playwright |
+| **Auction.com / Hubzu / Xome** scrape | $0 | National | Playwright |
+| **Dwellsy** scrape (rental comps) | $0 | Major metros | Playwright |
+| **Hawaii GIS** — Maui / Honolulu / Kauai / Hawaii counties | $0 | HI only | Cached lookup table + GIS deep-links |
+| **U.S. Census Geocoder** — address → county FIPS | $0 | National | REST |
+| **Google Maps JS API** (optional) | $0 within 28k loads/mo | Global | JS SDK |
+| **PropertyRadar** (optional, paid) | $89/mo | National, daily updates | REST — env-gated by `PROPERTYRADAR_API_KEY` |
+
+### Backend endpoints
+
+| Method | Route | Purpose |
+|---|---|---|
+| `GET` | `/api/distressed/search?location=...&cap=500&filters=...` | Aggregates from all sources, 1-hr cache |
+| `POST` | `/api/distressed/property` | Full Insights record + underwriting precompute, 24-hr cache |
+| `POST` | `/api/distress/scrape` | Direct county-recorder invocation |
+| `POST` | `/api/auction/scrape` | Auction.com / Hubzu / Xome aggregator |
+| `POST` | `/api/zoning/hawaii` | HI zoning lookup (zone code + STR legality) |
+| `GET`  | `/api/maps/config` | Returns active map provider + key (server-proxied) |
+
+### Optional .env keys
+
+```
+# Paid distress data — flip this on when you're ready to upgrade beyond free scraping
+PROPERTYRADAR_API_KEY=...
+
+# Google Maps (free tier 28k loads/mo). Omit to use OpenStreetMap fallback.
+GOOGLE_MAPS_API_KEY=...
+```
+
+### v2 (not yet shipped)
+
+- Skip-trace / owner contact (phone + email) with Gmail integration for one-click outreach
+- Opportunity-zone filter and overlay
+- Zoning lookup for non-Hawaii states
+- "Send to STR / LTR" tabs (whole building → LTR · per unit → STR)
+
 ## Troubleshooting
 
 | Error | Fix |
@@ -205,9 +267,24 @@ node scraper.mjs --address "Austin, TX" --count 12
 
 | File | Purpose |
 |------|---------|
-| `index.html` | Single-page app (HTML + CSS + JS inline) |
-| `package.json` | `npm run dev` serves via `npx serve` |
+| `index.html` | Single-page app (HTML + CSS + JS inline) — STR, LTR, Distressed tabs |
+| `server.mjs` | Express proxy with all backend API endpoints |
+| `package.json` | `npm run dev` starts the local server |
 | `STR Investment Analysis.xlsx` | Original Excel model with same calculations |
+| `lib/financial-calc.mjs` | Shared underwriting math (cap, NOI, CoC, DSCR, ROI, target price) used by both LTR and Distressed tabs |
+| `airdna-pdf-parser.mjs` | Parses AirDNA Rentalizer PDFs (handles K/M suffix, comp tables) |
+| `listing-scraper.mjs` | Pulls price + BR/BA + HOA + tax from Redfin/Zillow/Realtor listing URLs |
+| `redfin-scraper.mjs` | Redfin property data + full sales history (Playwright) |
+| `zillow-scraper.mjs` | Zillow BR/BA + price history fallback |
+| `scraper.mjs` | Airbnb listing scraper (legacy STR comps) |
+| `census-geocoder.mjs` | Address → county FIPS via free Census Bureau API |
+| `county-recorder-scraper.mjs` | Generic distress-filings handler with NETR Online fallback |
+| `state-handlers/{ca,tx,fl,ny,il,ga,oh,mi,az,hi}-recorder.mjs` | Per-state recorder portals (10 priority metros) |
+| `auction-scraper.mjs` | Auction.com / Hubzu / Xome aggregator |
+| `dwellsy-scraper.mjs` | Long-term rental comps for LTR/Distressed |
+| `zoning-hawaii.mjs` | HI zoning lookup (Maui / Honolulu / Kauai / Hawaii counties) with STR-legality flag |
+| `propertyradar-client.mjs` | Optional paid distress-data feed (env-gated by `PROPERTYRADAR_API_KEY`) |
+| `saved-search-drive.mjs` | Server stub for Google Drive saved-search sync (R/W happens client-side) |
 
 ## Saving Analyses
 

@@ -23,7 +23,17 @@ function median(arr) {
   return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
 }
 
-async function scrapeDwellsy(address, bedrooms) {
+// Public API — supports both positional and object-style call (for the
+// distressed-tab aggregator).
+export async function scrapeDwellsy(addressOrOpts, bedrooms) {
+  if (addressOrOpts && typeof addressOrOpts === 'object') {
+    bedrooms = addressOrOpts.bedrooms;
+    addressOrOpts = addressOrOpts.address;
+  }
+  return _scrapeDwellsyImpl(addressOrOpts, bedrooms);
+}
+
+async function _scrapeDwellsyImpl(address, bedrooms) {
   // Extract a city/zip from the address for the search query
   // Dwellsy's URL structure: https://dwellsy.com/homes-for-rent/{city-st} or ?search=<query>
   const search = address.trim();
@@ -130,25 +140,20 @@ async function scrapeDwellsy(address, bedrooms) {
   }
 }
 
-// ---------- CLI ----------
-const args = process.argv.slice(2);
-function getArg(flag, def) {
-  const i = args.indexOf(flag);
-  return i >= 0 && i + 1 < args.length ? args[i + 1] : def;
+// ---------- CLI (only when invoked directly, not when imported) ----------
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const args = process.argv.slice(2);
+  const getArg = (flag, def) => {
+    const i = args.indexOf(flag);
+    return i >= 0 && i + 1 < args.length ? args[i + 1] : def;
+  };
+  const address = getArg('--address', '');
+  const bedrooms = getArg('--bedrooms', '');
+  if (!address) {
+    console.error('Usage: node dwellsy-scraper.mjs --address "Cleveland, OH" [--bedrooms 2]');
+    process.exit(2);
+  }
+  scrapeDwellsy(address, bedrooms)
+    .then((data) => { process.stdout.write(JSON.stringify(data)); process.exit(0); })
+    .catch((err) => { console.error('[dwellsy-scraper] Error:', err.message); process.exit(1); });
 }
-const address = getArg('--address', '');
-const bedrooms = getArg('--bedrooms', '');
-if (!address) {
-  console.error('Usage: node dwellsy-scraper.mjs --address "Cleveland, OH" [--bedrooms 2]');
-  process.exit(2);
-}
-
-scrapeDwellsy(address, bedrooms)
-  .then((data) => {
-    process.stdout.write(JSON.stringify(data));
-    process.exit(0);
-  })
-  .catch((err) => {
-    console.error('[dwellsy-scraper] Error:', err.message);
-    process.exit(1);
-  });
