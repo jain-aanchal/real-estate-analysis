@@ -1056,6 +1056,83 @@
     overflow-y: auto;
   }
 
+  /* STR Opportunity Finder drawer */
+  .stropp-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100vh;
+    width: 580px;
+    max-width: 95vw;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    transform: translateX(100%);
+    transition: transform 0.25s;
+    z-index: 100;
+    overflow-y: auto;
+    box-shadow: -8px 0 24px rgba(0,0,0,0.4);
+  }
+  .stropp-drawer.open { transform: translateX(0); }
+  .stropp-drawer .drawer-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: var(--panel); z-index: 1;
+  }
+  .stropp-drawer .drawer-header h2 { margin: 0; font-size: 14px; color: var(--accent); border: none; padding: 0; }
+  .stropp-drawer .drawer-close { background: transparent; border: none; color: var(--muted); font-size: 22px; cursor: pointer; }
+  .stropp-drawer .drawer-subtabs {
+    display: flex; gap: 4px; border-bottom: 1px solid var(--border);
+    padding: 0 18px; background: var(--panel-2);
+  }
+  .stropp-drawer .drawer-subtab {
+    background: transparent; border: none; color: var(--muted);
+    padding: 10px 14px; font-size: 12px; font-weight: 600;
+    cursor: pointer; border-bottom: 2px solid transparent;
+  }
+  .stropp-drawer .drawer-subtab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .stropp-drawer .drawer-body { padding: 14px 18px; }
+
+  .so-uw-card {
+    background: linear-gradient(135deg, #064e3b 0%, #047857 100%);
+    border-radius: 10px; padding: 14px; margin-bottom: 14px;
+  }
+  .so-uw-card h3 { margin: 0 0 10px; font-size: 12px; color: #d1fae5; text-transform: uppercase; letter-spacing: 0.5px; }
+  .so-uw-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
+  .so-uw-item { display: flex; justify-content: space-between; font-size: 12px; }
+  .so-uw-item .lbl { color: #a7f3d0; }
+  .so-uw-item .val { color: #fff; font-weight: 600; }
+  .so-assumptions {
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.18);
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+  }
+  .so-assumptions input {
+    width: 100%; background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.2); color: #fff;
+    border-radius: 4px; padding: 4px 6px; font-size: 11px; text-align: right;
+  }
+  .so-assumptions label { display: block; color: #a7f3d0; font-size: 10px; margin-bottom: 2px; }
+  .so-scenarios-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .so-scenarios-table th, .so-scenarios-table td {
+    border: 1px solid var(--border); padding: 6px 10px; text-align: right;
+  }
+  .so-scenarios-table th:first-child, .so-scenarios-table td:first-child {
+    text-align: left; color: var(--muted);
+  }
+  .so-scenarios-table th { background: var(--panel-2); font-size: 10px; text-transform: uppercase; }
+  .so-section { margin-bottom: 14px; }
+  .so-section h4 {
+    color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px;
+    border-bottom: 1px solid var(--border); padding-bottom: 4px; margin: 14px 0 8px;
+  }
+  .so-section .row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; }
+  .so-section .row .lbl { color: var(--muted); }
+  .so-conf-badge {
+    display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 10px;
+    margin-left: 8px; font-weight: 600;
+  }
+  .so-conf-badge.verified { background: rgba(16,185,129,0.18); color: #6ee7b7; }
+  .so-conf-badge.estimated { background: rgba(148,163,184,0.18); color: #cbd5e1; }
+
   /* Address input styling */
   #address {
     background: var(--panel-2);
@@ -1866,6 +1943,48 @@
   </div>
 </div>
 </div> <!-- /tab-stropp -->
+
+<!-- STR Opportunity Finder Insights drawer -->
+<div id="stroppDrawer" class="stropp-drawer">
+  <div class="drawer-header">
+    <h2 id="soDrawerTitle">Property Insights</h2>
+    <button class="drawer-close" onclick="closeStroppDrawer()">×</button>
+  </div>
+  <div class="drawer-subtabs">
+    <button class="drawer-subtab active" data-so-subtab="str" onclick="switchStroppSubtab('str')">STR Analysis</button>
+    <button class="drawer-subtab" data-so-subtab="comps" onclick="switchStroppSubtab('comps')">Comparable Sales</button>
+    <button class="drawer-subtab" data-so-subtab="record" onclick="switchStroppSubtab('record')">Property Detail</button>
+  </div>
+  <div class="drawer-body">
+    <!-- Underwriting card always visible -->
+    <div class="so-uw-card" id="soUwCard">
+      <h3 id="soUwTitle">📊 STR Underwriting <span id="soConfBadge" class="so-conf-badge estimated">⚪ Estimated</span></h3>
+      <div class="so-uw-grid" id="soUwGrid"></div>
+      <details style="margin-top:8px;">
+        <summary style="cursor:pointer; color:#a7f3d0; font-size:11px;">Adjust assumptions</summary>
+        <div class="so-assumptions">
+          <div><label>Multiplier</label><input type="number" id="soa_mul" step="0.1" /></div>
+          <div><label>Occupancy</label><input type="number" id="soa_occ" step="1" /></div>
+          <div><label>Down %</label><input type="number" id="soa_down" step="1" /></div>
+          <div><label>Rate %</label><input type="number" id="soa_rate" step="0.05" /></div>
+          <div><label>Term yrs</label><input type="number" id="soa_term" step="1" /></div>
+          <div><label>Vacancy %</label><input type="number" id="soa_vac" step="0.5" /></div>
+          <div><label>Maint %</label><input type="number" id="soa_maint" step="0.5" /></div>
+          <div><label>PM %</label><input type="number" id="soa_pm" step="0.5" /></div>
+        </div>
+      </details>
+    </div>
+
+    <div id="soSub_str" class="so-subtab-pane"></div>
+    <div id="soSub_comps" class="so-subtab-pane" style="display:none;"></div>
+    <div id="soSub_record" class="so-subtab-pane" style="display:none;"></div>
+
+    <div style="margin-top:16px; display:flex; gap:8px;">
+      <button class="ltr-action-btn" onclick="manualAirDNARefine()" id="soManualAirDNABtn">📊 Run AirDNA Rentalizer</button>
+      <button class="reset" onclick="exportStroppSinglePdf()">📄 Export PDF</button>
+    </div>
+  </div>
+</div>
 
 <!-- Insights drawer (Sale Comp / Lease Data / Record) -->
 <div id="distressedDrawer" class="distressed-drawer">
@@ -4943,9 +5062,276 @@ function renderStroppResults() {
   }).join('');
 }
 
-// Stub — Phase 4 will wire the drawer
-function openStroppDrawer(id) {
-  console.log('[stropp] drawer for', id, '— wiring in Phase 4 (CTO-132)');
+// =====================================================
+// STR Opportunity Finder — Insights drawer (CTO-132)
+// =====================================================
+let _soActiveProperty = null;
+let _soActivePropertyData = null;
+let _soActiveSubtab = 'str';
+
+async function openStroppDrawer(id) {
+  const r = stroppState.results.find(x => x.id === id);
+  if (!r) return;
+  _soActiveProperty = r;
+
+  // Open drawer immediately with what we have, then fetch detail in background
+  $('soDrawerTitle').textContent = r.address || 'Property';
+  $('stroppDrawer').classList.add('open');
+  renderStroppUwCard(r);
+
+  // Pre-fill assumptions inputs from result
+  $('soa_mul').value = stroppState.lastQuery?.strMultiplier
+    || (r.underwriting?.assumptions?.strMultiplier) || '';
+  $('soa_occ').value = r._occupancy ? Math.round(r._occupancy * 100) : '';
+  $('soa_down').value = r.underwriting?.assumptions?.downPct || 35;
+  $('soa_rate').value = r.underwriting?.assumptions?.rate || 7.25;
+  $('soa_term').value = r.underwriting?.assumptions?.termYears || 30;
+  $('soa_vac').value = r.underwriting?.assumptions?.vacancyRate || 6;
+  $('soa_maint').value = r.underwriting?.assumptions?.maintPct || 8;
+  $('soa_pm').value = r.underwriting?.assumptions?.pmPct || 8;
+
+  // Wire live recompute on every input
+  ['soa_mul','soa_occ','soa_down','soa_rate','soa_term','soa_vac','soa_maint','soa_pm']
+    .forEach(id => $(id).oninput = recomputeStroppUw);
+
+  // Fetch detail (record, comps, scenarios)
+  try {
+    const resp = await fetch('/api/str-opportunity/property', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        address: r.address,
+        price: r.price,
+        bedrooms: r.bedrooms,
+        bathrooms: r.bathrooms,
+        units: 1,
+        strAnnualRevenue: r.strAnnualRevenue,
+        occupancy: 0.60
+      })
+    });
+    const d = await resp.json();
+    if (resp.ok) {
+      _soActivePropertyData = d;
+      renderStroppScenariosTab(d.scenarios);
+      renderStroppCompsTab(d.nearbyComps);
+      renderStroppRecordTab(d.record, d);
+    }
+  } catch (e) {
+    console.warn('[stropp] property fetch failed:', e.message);
+  }
+}
+
+function closeStroppDrawer() {
+  $('stroppDrawer').classList.remove('open');
+  _soActiveProperty = null;
+  _soActivePropertyData = null;
+}
+
+function switchStroppSubtab(name) {
+  _soActiveSubtab = name;
+  document.querySelectorAll('#stroppDrawer .drawer-subtab')
+    .forEach(b => b.classList.toggle('active', b.dataset.soSubtab === name));
+  ['str','comps','record'].forEach(k => {
+    $(`soSub_${k}`).style.display = (k === name) ? 'block' : 'none';
+  });
+}
+
+function renderStroppUwCard(r) {
+  const grid = $('soUwGrid');
+  const fmt = (v) => isFinite(v) && v !== 0 ? `$${Math.round(v).toLocaleString()}` : '—';
+  grid.innerHTML = `
+    <div class="so-uw-item"><span class="lbl">Price</span><span class="val">${fmt(r.price)}</span></div>
+    <div class="so-uw-item"><span class="lbl">Cap rate</span><span class="val">${(r.capRate*100).toFixed(2)}%</span></div>
+    <div class="so-uw-item"><span class="lbl">STR annual rev</span><span class="val">${fmt(r.strAnnualRevenue)}</span></div>
+    <div class="so-uw-item"><span class="lbl">NOI</span><span class="val">${fmt(r.noi)}</span></div>
+    <div class="so-uw-item"><span class="lbl">Monthly CF</span><span class="val">${fmt(r.monthlyCF)}</span></div>
+    <div class="so-uw-item"><span class="lbl">DSCR</span><span class="val">${r.dscr ? r.dscr.toFixed(2) : '—'}</span></div>
+    <div class="so-uw-item"><span class="lbl">CoC return</span><span class="val">${(r.cocReturn*100).toFixed(1)}%</span></div>
+    <div class="so-uw-item"><span class="lbl">5yr Total ROI</span><span class="val">${(r.roi*100).toFixed(1)}%</span></div>`;
+
+  // Confidence badge
+  const badge = $('soConfBadge');
+  if (r.confidence === 'verified' || r.confidence === 'airdna-verified') {
+    badge.className = 'so-conf-badge verified';
+    badge.textContent = '🟢 AirDNA-verified';
+  } else {
+    badge.className = 'so-conf-badge estimated';
+    badge.textContent = '⚪ Estimated';
+  }
+}
+
+function renderStroppScenariosTab(scenarios) {
+  const pane = $('soSub_str');
+  if (!scenarios) { pane.innerHTML = '<p class="small-note">Loading scenarios…</p>'; return; }
+  const fmt = (v) => isFinite(v) && v !== 0 ? `$${Math.round(v).toLocaleString()}` : '—';
+  const fp = (v) => isFinite(v) ? (v * 100).toFixed(2) + '%' : '—';
+  const rows = [
+    ['Annual revenue', 'annualRevenue', fmt],
+    ['Total OpEx',     'totalOpex',     fmt],
+    ['NOI',            'noi',           fmt],
+    ['Monthly mortgage', 'monthlyPI',   fmt],
+    ['Monthly CF',     'monthlyCF',     fmt],
+    ['Cap rate',       'capRate',       fp],
+    ['CoC',            'cocReturn',     fp],
+    ['DSCR',           'dscr',          (v) => v ? v.toFixed(2) : '—']
+  ];
+  let html = `<table class="so-scenarios-table">
+    <tr><th>Metric</th><th>Low</th><th>Mid</th><th>High</th></tr>`;
+  for (const [label, key, formatter] of rows) {
+    html += `<tr>
+      <td>${label}</td>
+      <td>${formatter(scenarios.low[key])}</td>
+      <td>${formatter(scenarios.mid[key])}</td>
+      <td>${formatter(scenarios.high[key])}</td>
+    </tr>`;
+  }
+  html += `</table>`;
+  html += `<p class="small-note" style="margin-top:6px;">Low = ADR×0.8, Occ−10pts · Mid = exact · High = ADR×1.2, Occ+10pts</p>`;
+  pane.innerHTML = html;
+}
+
+function renderStroppCompsTab(comps) {
+  const pane = $('soSub_comps');
+  if (!comps || !comps.length) {
+    pane.innerHTML = '<p class="small-note">No comparable sales found in this zip.</p>';
+    return;
+  }
+  const fmt = (v) => v ? `$${Math.round(v).toLocaleString()}` : '—';
+  let html = `<table class="so-scenarios-table">
+    <tr><th>Address</th><th>Price</th><th>Date</th><th>BR/BA</th><th>Sqft</th></tr>`;
+  for (const c of comps) {
+    html += `<tr>
+      <td>${(c.address || '').slice(0, 40)}</td>
+      <td>${fmt(c.price)}</td>
+      <td>${(c.lastSaleDate || '').slice(0, 7)}</td>
+      <td>${c.bedrooms || '?'}/${c.bathrooms || '?'}</td>
+      <td>${c.sqft || '—'}</td>
+    </tr>`;
+  }
+  html += `</table>`;
+  pane.innerHTML = html;
+}
+
+function renderStroppRecordTab(record, full) {
+  const pane = $('soSub_record');
+  const fmt = (v) => v ? `$${Math.round(v).toLocaleString()}` : '—';
+  const owner = record?.owner || {};
+  const tax = record?.tax || {};
+  const lastSale = record?.lastSale || {};
+  pane.innerHTML = `
+    <div class="so-section">
+      <h4>Owner</h4>
+      <div class="row"><span class="lbl">Name</span><span>${owner.name || '—'}</span></div>
+      <div class="row"><span class="lbl">Mailing address</span><span>${owner.mailingAddress || '—'}</span></div>
+      <div class="row"><span class="lbl">Owner-occupied</span><span>${owner.ownerOccupied ? 'Yes' : 'No'}</span></div>
+    </div>
+    <div class="so-section">
+      <h4>Last sale</h4>
+      <div class="row"><span class="lbl">Price</span><span>${fmt(lastSale.price)}</span></div>
+      <div class="row"><span class="lbl">Date</span><span>${lastSale.date || '—'}</span></div>
+    </div>
+    <div class="so-section">
+      <h4>Tax</h4>
+      <div class="row"><span class="lbl">Assessed value</span><span>${fmt(tax.assessedValue)}</span></div>
+    </div>
+    <div class="so-section">
+      <h4>Property</h4>
+      <div class="row"><span class="lbl">Year built</span><span>${full?.yearBuilt || '—'}</span></div>
+      <div class="row"><span class="lbl">Sqft</span><span>${full?.sqft || '—'}</span></div>
+    </div>`;
+}
+
+// Recompute underwriting card live from assumption inputs.
+// Uses LTR rent (we know it) + the user's STR multiplier + occupancy + financial
+// assumptions to derive a fresh capRate/CF/DSCR. This stays in sync with what
+// the LTR/STR tabs would compute via lib/financial-calc.mjs.
+function recomputeStroppUw() {
+  const r = _soActiveProperty;
+  if (!r) return;
+  const mul = parseFloat($('soa_mul').value) || 1.8;
+  const occ = (parseFloat($('soa_occ').value) || 60) / 100;
+  const strAnnual = (r.ltrMonthlyRent || 0) * 12 * mul * occ;
+  // Lightweight inline UW (mirrors lib/financial-calc.mjs core formulas)
+  const price = r.price;
+  const downPct = parseFloat($('soa_down').value) || 35;
+  const rate    = parseFloat($('soa_rate').value) || 7.25;
+  const term    = parseFloat($('soa_term').value) || 30;
+  const vac     = parseFloat($('soa_vac').value)  || 6;
+  const maintP  = parseFloat($('soa_maint').value)|| 8;
+  const pmP     = parseFloat($('soa_pm').value)   || 8;
+
+  const down = price * (downPct / 100);
+  const loan = price - down;
+  const m = (rate / 100) / 12, n = term * 12;
+  const monthlyPI = m === 0 ? loan / n : loan * (m * Math.pow(1+m,n)) / (Math.pow(1+m,n)-1);
+  const annualDS = monthlyPI * 12;
+
+  const gprAnnual = strAnnual;
+  const vacLoss = gprAnnual * (vac / 100);
+  const egi = gprAnnual - vacLoss;
+  // Simple OpEx: tax 1.1% of price + maint% of egi + capex 5% of egi + pm% of egi
+  const tax = price * 0.011;
+  const opex = tax + egi * ((maintP + 5 + pmP) / 100);
+  const noi = egi - opex;
+  const annualCF = noi - annualDS;
+  const capRate = noi / price;
+  const dscr = annualDS > 0 ? noi / annualDS : 0;
+  const cocReturn = down > 0 ? annualCF / down : 0;
+
+  renderStroppUwCard({
+    ...r,
+    strAnnualRevenue: Math.round(strAnnual),
+    capRate, noi, monthlyCF: annualCF / 12, dscr, cocReturn,
+    roi: r.roi   // 5yr ROI requires full recompute — keep stale for v1
+  });
+}
+
+// Manual AirDNA refine (button in drawer)
+async function manualAirDNARefine() {
+  const r = _soActiveProperty;
+  if (!r) return;
+  const btn = $('soManualAirDNABtn');
+  btn.disabled = true; btn.textContent = '⏳ Refining…';
+  try {
+    const resp = await fetch('/api/str-opportunity/refine', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ addresses: [r.address] })
+    });
+    const d = await resp.json();
+    const ai = d?.[r.address];
+    if (ai?.revenue) {
+      r.strAnnualRevenue = ai.revenue;
+      r.confidence = 'verified';
+      // Re-run client-side UW recompute with the new revenue
+      const ltrEquiv = ai.revenue / 12;
+      r.ltrMonthlyRent = ltrEquiv;  // hack: lets recomputeStroppUw work
+      $('soa_mul').value = 1.0;     // because we're now using actual STR
+      $('soa_occ').value = 100;
+      recomputeStroppUw();
+      btn.textContent = '✓ AirDNA Verified';
+    } else {
+      btn.textContent = '⚠ AirDNA returned no data';
+    }
+  } catch (e) {
+    btn.textContent = '❌ ' + e.message;
+  }
+}
+
+function exportStroppSinglePdf() {
+  const r = _soActiveProperty;
+  if (!r) return;
+  // For v1, dump as a printable HTML window
+  const w = window.open('', '_blank');
+  w.document.write(`<html><head><title>${r.address}</title>
+    <style>body{font-family:system-ui;padding:20px;}h1{font-size:16px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:6px}</style>
+    </head><body>
+    <h1>${r.address}</h1>
+    <p>Price: $${r.price.toLocaleString()} · ${r.bedrooms}BR/${r.bathrooms}BA · ${r.sqft?.toLocaleString() || ''} sqft · built ${r.yearBuilt || '?'}</p>
+    <p>Cap rate: ${(r.capRate*100).toFixed(2)}% · Monthly CF: $${Math.round(r.monthlyCF).toLocaleString()} · DSCR: ${r.dscr?.toFixed(2)}</p>
+    <p>STR annual revenue: $${r.strAnnualRevenue.toLocaleString()} · LTR rent: $${r.ltrMonthlyRent.toLocaleString()}/mo</p>
+    </body></html>`);
+  w.print();
 }
 
 // Build the /api/str-opportunity/search URL from current filter state
