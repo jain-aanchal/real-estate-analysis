@@ -1885,8 +1885,10 @@
 
     <div class="stropp-targetcap-row">
       <label>Target cap rate:</label>
-      <input type="range" id="so_targetCap" min="6" max="20" step="0.5" value="11" oninput="onTargetCapChange()" />
+      <input type="range" id="so_targetCap" min="0" max="20" step="0.5" value="11" oninput="onTargetCapChange()" />
       <span class="cap-value" id="so_targetCapDisplay">11.0%</span>
+      <label style="margin-left:24px;">Min DSCR:</label>
+      <input type="number" id="so_minDscr" step="0.05" min="0" max="5" placeholder="any" style="width:90px;" oninput="renderStroppResults()" />
     </div>
 
     <div class="filter-row">
@@ -4992,7 +4994,7 @@ function resetStroppFilters() {
     el.checked = (i < 3); // first 3 (SFR/Condo/Townhome) on by default
   });
   ['so_brMin','so_brMax','so_baMin','so_priceMin','so_priceMax','so_yearBefore',
-   'so_multiplier','so_occupancy'].forEach(id => $(id) && ($(id).value = ''));
+   'so_multiplier','so_occupancy','so_minDscr'].forEach(id => $(id) && ($(id).value = ''));
   $('so_radius').value = '25';
   $('so_targetCap').value = 11;
   $('so_targetCapDisplay').textContent = '11.0%';
@@ -5026,9 +5028,11 @@ function renderStroppResults() {
   const tbody = $('so_resultsBody');
   if (!tbody) return;
   const targetCap = parseFloat($('so_targetCap').value) / 100;
+  const minDscr = numOrNull('so_minDscr');
 
-  // Filter to meet target cap + sort by current field/direction
+  // Filter to meet target cap + min DSCR, then sort by current field/direction
   let list = stroppState.results.filter(r => (r.capRate || 0) >= targetCap);
+  if (minDscr != null) list = list.filter(r => (r.dscr || 0) >= minDscr);
   const f = stroppState.sortField, d = stroppState.sortDir === 'asc' ? 1 : -1;
   list = [...list].sort((a, b) => {
     const av = a[f] ?? 0, bv = b[f] ?? 0;
@@ -5036,8 +5040,9 @@ function renderStroppResults() {
     return (av - bv) * d;
   });
 
+  const dscrText = minDscr != null ? ` & DSCR ≥ ${minDscr.toFixed(2)}` : '';
   $('so_resultCount').textContent =
-    `${list.length} properties meet target cap (of ${stroppState.results.length} candidates)`;
+    `${list.length} properties meet target cap${dscrText} (of ${stroppState.results.length} candidates)`;
   $('so_exportBtn').disabled = list.length === 0;
 
   if (!list.length) { tbody.innerHTML = ''; return; }
@@ -5554,6 +5559,7 @@ function readCurrentStroppFilters() {
     location: $('so_location').value.trim(),
     radius: $('so_radius').value,
     targetCap: $('so_targetCap').value,
+    minDscr: $('so_minDscr').value,
     multiplier: $('so_multiplier').value,
     occupancy: $('so_occupancy').value,
     resultCap: $('so_resultCap').value,
@@ -5566,6 +5572,7 @@ function applyStroppFilters(saved) {
   if (saved.location)   $('so_location').value = saved.location;
   if (saved.radius)     $('so_radius').value = saved.radius;
   if (saved.targetCap)  { $('so_targetCap').value = saved.targetCap; onTargetCapChange(); }
+  if (saved.minDscr != null) $('so_minDscr').value = saved.minDscr;
   if (saved.multiplier) $('so_multiplier').value = saved.multiplier;
   if (saved.occupancy)  $('so_occupancy').value = saved.occupancy;
   if (saved.resultCap)  $('so_resultCap').value = saved.resultCap;
@@ -5645,7 +5652,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function exportStroppCsv() {
   const targetCap = parseFloat($('so_targetCap').value) / 100;
-  const list = stroppState.results.filter(r => (r.capRate || 0) >= targetCap);
+  const minDscr = numOrNull('so_minDscr');
+  let list = stroppState.results.filter(r => (r.capRate || 0) >= targetCap);
+  if (minDscr != null) list = list.filter(r => (r.dscr || 0) >= minDscr);
   if (!list.length) return;
   const cols = ['address','propertyType','bedrooms','bathrooms','sqft','yearBuilt',
                 'price','ltrMonthlyRent','strAnnualRevenue','capRate','monthlyCF','dscr','cocReturn'];
