@@ -913,6 +913,149 @@
     font-size: 12px;
   }
 
+  /* ===== STR Opportunity Finder tab ===== */
+  .stropp-container { max-width: 1600px; margin: 0 auto; padding: 16px 32px; }
+  .stropp-filterbar {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+  }
+  .stropp-filterbar .filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .stropp-filterbar label { font-size: 12px; color: var(--muted); }
+  .stropp-filterbar input[type="text"],
+  .stropp-filterbar input[type="number"],
+  .stropp-filterbar select {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  .stropp-filterbar input[type="text"] { width: 280px; }
+  .stropp-filterbar input[type="number"] { width: 100px; }
+  .stropp-filterbar .filter-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    padding: 5px 10px;
+    border-radius: 14px;
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .stropp-filterbar .filter-pill input { accent-color: var(--accent); }
+  .stropp-filterbar .filter-pill.active {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .stropp-targetcap-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+  }
+  .stropp-targetcap-row input[type="range"] {
+    width: 280px;
+    accent-color: var(--accent);
+  }
+  .stropp-targetcap-row .cap-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+    min-width: 56px;
+  }
+  .stropp-market-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 4px 12px;
+    border-radius: 14px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .stropp-results {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .stropp-results-header {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+    background: var(--panel-2);
+    font-size: 13px;
+  }
+  .stropp-results table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .stropp-results th,
+  .stropp-results td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .stropp-results th {
+    background: var(--panel-2);
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.4px;
+    cursor: pointer;
+  }
+  .stropp-results th.sort-asc::after  { content: ' ▲'; opacity: 0.6; }
+  .stropp-results th.sort-desc::after { content: ' ▼'; opacity: 0.6; }
+  .stropp-results tbody tr {
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .stropp-results tbody tr:hover { background: var(--panel-2); }
+  .stropp-results td.right { text-align: right; }
+  .stropp-cap-good { color: var(--green); font-weight: 600; }
+  .stropp-cap-warn { color: var(--yellow); }
+  .stropp-cap-bad  { color: var(--red); }
+  .stropp-cf-good  { color: var(--green); }
+  .stropp-cf-bad   { color: var(--red); }
+  .stropp-conf {
+    display: inline-block;
+    width: 14px;
+    text-align: center;
+    font-size: 12px;
+  }
+  .stropp-conf-estimated { color: var(--muted); }
+  .stropp-conf-refining  { color: var(--yellow); }
+  .stropp-conf-verified  { color: var(--green); }
+  .stropp-search-status {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 6px 0;
+  }
+  .stropp-results-wrapper {
+    max-height: 660px;
+    overflow-y: auto;
+  }
+
   /* Address input styling */
   #address {
     background: var(--panel-2);
@@ -943,6 +1086,7 @@
   <button class="tab-btn active" data-tab="str" onclick="switchTab('str')">🏖️ Short-Term Rental</button>
   <button class="tab-btn" data-tab="ltr" onclick="switchTab('ltr')">🏢 Multi-Family LTR</button>
   <button class="tab-btn" data-tab="distressed" onclick="switchTab('distressed')">🏚️ Distressed</button>
+  <button class="tab-btn" data-tab="stropp" onclick="switchTab('stropp')">💎 STR Opportunity Finder</button>
 </div>
 
 <!-- Save destination modal -->
@@ -1614,6 +1758,114 @@
   </div>
 </div>
 </div> <!-- /tab-distressed -->
+
+<!-- =================================================================== -->
+<!-- 💎 STR Opportunity Finder Tab                                         -->
+<!-- =================================================================== -->
+<div id="tab-stropp" class="tab-content">
+<div class="stropp-container">
+
+  <!-- Filter bar -->
+  <div class="stropp-filterbar">
+    <div class="filter-row">
+      <label>📍 Location:</label>
+      <div class="autocomplete-wrapper" style="position:relative;">
+        <input type="text" id="so_location" placeholder="city, state · zip · address (e.g. Lahaina, HI)" autocomplete="off" />
+        <div class="autocomplete-list" id="so_locationDropdown"></div>
+      </div>
+      <button class="ltr-action-btn" onclick="stroppSearch()">🔍 Search</button>
+      <span id="so_searchStatus" class="stropp-search-status"></span>
+    </div>
+
+    <div class="filter-row">
+      <label>Radius:</label>
+      <select id="so_radius">
+        <option value="5">5 mi</option>
+        <option value="10">10 mi</option>
+        <option value="25" selected>25 mi</option>
+        <option value="50">50 mi</option>
+        <option value="100">100 mi</option>
+      </select>
+      <span class="small-note">(only used for address searches)</span>
+    </div>
+
+    <div class="filter-row">
+      <span style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px;">Type:</span>
+      <label class="filter-pill"><input type="checkbox" data-so-filter="type" value="single-family" checked /> Single-family</label>
+      <label class="filter-pill"><input type="checkbox" data-so-filter="type" value="condo" checked /> Condo</label>
+      <label class="filter-pill"><input type="checkbox" data-so-filter="type" value="townhome" checked /> Townhome</label>
+      <label class="filter-pill"><input type="checkbox" data-so-filter="type" value="multi-family" /> Multi-family (2-4)</label>
+    </div>
+
+    <div class="filter-row">
+      <label>Beds min: <input type="number" id="so_brMin" min="0" /></label>
+      <label>Beds max: <input type="number" id="so_brMax" min="0" /></label>
+      <label>Baths min: <input type="number" id="so_baMin" min="0" step="0.5" /></label>
+      <label>Price min: <input type="number" id="so_priceMin" placeholder="$0" /></label>
+      <label>Price max: <input type="number" id="so_priceMax" placeholder="$ any" /></label>
+      <label>Built before: <input type="number" id="so_yearBefore" placeholder="any" min="1800" max="2030" /></label>
+    </div>
+
+    <div class="stropp-targetcap-row">
+      <label>Target cap rate:</label>
+      <input type="range" id="so_targetCap" min="6" max="20" step="0.5" value="11" oninput="onTargetCapChange()" />
+      <span class="cap-value" id="so_targetCapDisplay">11.0%</span>
+    </div>
+
+    <div class="filter-row">
+      <span class="stropp-market-display" id="so_marketDisplay">Market: —</span>
+      <label>STR multiplier override:
+        <input type="number" id="so_multiplier" step="0.1" min="0.5" max="5.0" placeholder="auto" />
+      </label>
+      <label>Occupancy override:
+        <input type="number" id="so_occupancy" step="1" min="0" max="100" placeholder="auto" />
+        <span class="small-note">%</span>
+      </label>
+      <label>Result cap:
+        <select id="so_resultCap">
+          <option>250</option>
+          <option selected>500</option>
+          <option>1000</option>
+        </select>
+      </label>
+      <button class="reset" onclick="resetStroppFilters()" style="margin-left:auto;">Reset Filters</button>
+    </div>
+  </div>
+
+  <!-- Results table -->
+  <div class="stropp-results">
+    <div class="stropp-results-header">
+      <span id="so_resultCount" class="stropp-search-status">Enter a location to find STR opportunities</span>
+      <span>
+        <button class="reset" onclick="exportStroppCsv()" id="so_exportBtn" disabled>📥 Export CSV</button>
+      </span>
+    </div>
+    <div class="stropp-results-wrapper">
+      <table id="so_resultsTable">
+        <thead>
+          <tr>
+            <th style="width:30px;"><input type="checkbox" id="so_selectAll" /></th>
+            <th>#</th>
+            <th title="🟢 AirDNA-verified · ⚪ Estimated · ⏳ refining">Conf</th>
+            <th data-so-sort="address">Address</th>
+            <th data-so-sort="propertyType">Type</th>
+            <th data-so-sort="bedrooms">BR/BA</th>
+            <th data-so-sort="sqft" class="right">Sqft</th>
+            <th data-so-sort="yearBuilt" class="right">Year</th>
+            <th data-so-sort="price" class="right">Price</th>
+            <th data-so-sort="ltrMonthlyRent" class="right">LTR rent</th>
+            <th data-so-sort="strAnnualRevenue" class="right">STR rev/yr</th>
+            <th data-so-sort="capRate" class="right sort-desc">Cap rate</th>
+            <th data-so-sort="monthlyCF" class="right">Monthly CF</th>
+            <th data-so-sort="dscr" class="right">DSCR</th>
+          </tr>
+        </thead>
+        <tbody id="so_resultsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div> <!-- /tab-stropp -->
 
 <!-- Insights drawer (Sale Comp / Lease Data / Record) -->
 <div id="distressedDrawer" class="distressed-drawer">
@@ -4580,6 +4832,283 @@ refreshSavedSearchDropdown();
     items = []; activeIdx = -1;
   }
 })();
+
+// ============================================================
+// 💎 STR Opportunity Finder tab
+// ============================================================
+const stroppState = {
+  results: [],            // all results from server (cached client-side for live filtering)
+  sortField: 'capRate',
+  sortDir: 'desc',
+  lastQuery: null         // last search query so we can re-fetch
+};
+
+function readStroppFilters() {
+  const types = [...document.querySelectorAll('#tab-stropp [data-so-filter="type"]:checked')]
+    .map(el => el.value);
+  return {
+    types,
+    brMin: numOrNull('so_brMin'),
+    brMax: numOrNull('so_brMax'),
+    baMin: numOrNull('so_baMin'),
+    priceMin: numOrNull('so_priceMin'),
+    priceMax: numOrNull('so_priceMax'),
+    yearBefore: numOrNull('so_yearBefore')
+  };
+}
+function numOrNull(id) {
+  const v = $(id)?.value;
+  return v == null || v === '' ? null : Number(v);
+}
+
+function resetStroppFilters() {
+  // Reset checkboxes
+  document.querySelectorAll('#tab-stropp [data-so-filter="type"]').forEach((el, i) => {
+    el.checked = (i < 3); // first 3 (SFR/Condo/Townhome) on by default
+  });
+  ['so_brMin','so_brMax','so_baMin','so_priceMin','so_priceMax','so_yearBefore',
+   'so_multiplier','so_occupancy'].forEach(id => $(id) && ($(id).value = ''));
+  $('so_radius').value = '25';
+  $('so_targetCap').value = 11;
+  $('so_targetCapDisplay').textContent = '11.0%';
+  $('so_resultCap').value = '500';
+}
+
+function onTargetCapChange() {
+  const v = parseFloat($('so_targetCap').value);
+  $('so_targetCapDisplay').textContent = v.toFixed(1) + '%';
+  // Live client-side re-filter (no refetch)
+  renderStroppResults();
+}
+
+// Cap rate cell color class
+function capClass(capRate) {
+  if (capRate >= 0.11) return 'stropp-cap-good';
+  if (capRate >= 0.08) return 'stropp-cap-warn';
+  return 'stropp-cap-bad';
+}
+function soFmtMoney(v) {
+  if (!isFinite(v) || v === 0) return '—';
+  const sign = v < 0 ? '-' : '';
+  return `${sign}$${Math.abs(Math.round(v)).toLocaleString()}`;
+}
+function soFmtPct(v, dec = 1) {
+  if (!isFinite(v) || v === 0) return '—';
+  return (v * 100).toFixed(dec) + '%';
+}
+
+function renderStroppResults() {
+  const tbody = $('so_resultsBody');
+  if (!tbody) return;
+  const targetCap = parseFloat($('so_targetCap').value) / 100;
+
+  // Filter to meet target cap + sort by current field/direction
+  let list = stroppState.results.filter(r => (r.capRate || 0) >= targetCap);
+  const f = stroppState.sortField, d = stroppState.sortDir === 'asc' ? 1 : -1;
+  list = [...list].sort((a, b) => {
+    const av = a[f] ?? 0, bv = b[f] ?? 0;
+    if (typeof av === 'string') return av.localeCompare(bv) * d;
+    return (av - bv) * d;
+  });
+
+  $('so_resultCount').textContent =
+    `${list.length} properties meet target cap (of ${stroppState.results.length} candidates)`;
+  $('so_exportBtn').disabled = list.length === 0;
+
+  if (!list.length) { tbody.innerHTML = ''; return; }
+
+  tbody.innerHTML = list.slice(0, 1000).map((r, i) => {
+    const confIcon = { verified: '🟢', refining: '⏳', estimated: '⚪' }[r.confidence] || '⚪';
+    const confClass = `stropp-conf-${r.confidence}`;
+    const cfClass = (r.monthlyCF || 0) > 0 ? 'stropp-cf-good' : 'stropp-cf-bad';
+    const dscrClass = (r.dscr || 0) >= 1.25 ? 'stropp-cap-good'
+                    : (r.dscr || 0) >= 1.0  ? 'stropp-cap-warn'
+                    : 'stropp-cap-bad';
+    return `<tr data-so-id="${r.id}" onclick="openStroppDrawer('${r.id}')">
+      <td><input type="checkbox" /></td>
+      <td>${i + 1}</td>
+      <td><span class="stropp-conf ${confClass}">${confIcon}</span></td>
+      <td>${(r.address || '').slice(0, 50)}</td>
+      <td>${r.propertyType || '—'}</td>
+      <td>${r.bedrooms || '?'}/${r.bathrooms || '?'}</td>
+      <td class="right">${r.sqft ? r.sqft.toLocaleString() : '—'}</td>
+      <td class="right">${r.yearBuilt || '—'}</td>
+      <td class="right">${soFmtMoney(r.price)}</td>
+      <td class="right">${soFmtMoney(r.ltrMonthlyRent)}</td>
+      <td class="right">${soFmtMoney(r.strAnnualRevenue)}</td>
+      <td class="right ${capClass(r.capRate)}">${soFmtPct(r.capRate)}</td>
+      <td class="right ${cfClass}">${soFmtMoney(r.monthlyCF)}</td>
+      <td class="right ${dscrClass}">${r.dscr ? r.dscr.toFixed(2) : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// Stub — Phase 4 will wire the drawer
+function openStroppDrawer(id) {
+  console.log('[stropp] drawer for', id, '— wiring in Phase 4 (CTO-132)');
+}
+
+// Build the /api/str-opportunity/search URL from current filter state
+function buildStroppQuery() {
+  const params = new URLSearchParams();
+  params.set('location', $('so_location').value.trim());
+  params.set('targetCap', (parseFloat($('so_targetCap').value) / 100).toString());
+  params.set('cap', $('so_resultCap').value);
+  params.set('radius', $('so_radius').value);
+  const mul = $('so_multiplier').value;
+  const occ = $('so_occupancy').value;
+  if (mul) params.set('strMultiplier', mul);
+  if (occ) params.set('occupancy', (parseFloat(occ) / 100).toString());
+  params.set('filters', JSON.stringify(readStroppFilters()));
+  return params.toString();
+}
+
+async function stroppSearch() {
+  const loc = $('so_location').value.trim();
+  if (!loc) {
+    $('so_searchStatus').textContent = 'Enter a location first.';
+    $('so_searchStatus').style.color = 'var(--yellow)';
+    return;
+  }
+  const status = $('so_searchStatus');
+  status.textContent = '⏳ Searching…';
+  status.style.color = 'var(--muted)';
+
+  try {
+    const q = buildStroppQuery();
+    stroppState.lastQuery = q;
+    const r = await fetch(`/api/str-opportunity/search?${q}`);
+    const d = await r.json();
+    if (!r.ok) {
+      status.textContent = `⚠ ${d.error || 'failed'}`;
+      status.style.color = 'var(--red)';
+      return;
+    }
+    stroppState.results = d.results || [];
+
+    // Update market display
+    const ed = $('so_marketDisplay');
+    if (d.marketType) {
+      ed.textContent = `Market: ${d.marketType} ${d.marketEmoji || ''} · multiplier ${d.autoMultiplier}× · occ ${Math.round((d.autoOccupancy || 0) * 100)}%`;
+    }
+
+    status.textContent = `✓ ${stroppState.results.length} candidates · scanned ${d.totalScanned} · ${d.tookMs}ms${d.cached ? ' (cached)' : ''}`;
+    status.style.color = 'var(--green)';
+
+    renderStroppResults();
+  } catch (e) {
+    status.textContent = '❌ ' + e.message;
+    status.style.color = 'var(--red)';
+  }
+}
+
+// Column-header sort clicks
+document.querySelectorAll('#tab-stropp [data-so-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const field = th.dataset.soSort;
+    if (stroppState.sortField === field) {
+      stroppState.sortDir = stroppState.sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      stroppState.sortField = field;
+      stroppState.sortDir = (field === 'address' || field === 'propertyType') ? 'asc' : 'desc';
+    }
+    document.querySelectorAll('#tab-stropp [data-so-sort]').forEach(t => {
+      t.classList.remove('sort-asc', 'sort-desc');
+    });
+    th.classList.add(stroppState.sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+    renderStroppResults();
+  });
+});
+
+// Live autocomplete for location input (mirrors Distressed tab pattern)
+(function initStroppAutocomplete() {
+  const input = $('so_location');
+  const dropdown = $('so_locationDropdown');
+  if (!input || !dropdown) return;
+  let debounceTimer = null, activeIdx = -1, items = [];
+
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    const q = input.value.trim();
+    if (q.length < 2) { hide(); return; }
+    debounceTimer = setTimeout(() => fetchSug(q), 220);
+  });
+  input.addEventListener('keydown', (e) => {
+    if (!dropdown.classList.contains('visible')) {
+      if (e.key === 'Enter') { e.preventDefault(); stroppSearch(); }
+      return;
+    }
+    if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx = Math.min(activeIdx + 1, items.length - 1); hl(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); hl(); }
+    else if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); sel(activeIdx); }
+    else if (e.key === 'Enter') { e.preventDefault(); hide(); stroppSearch(); }
+    else if (e.key === 'Escape') hide();
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#tab-stropp .autocomplete-wrapper')) hide();
+  });
+  async function fetchSug(q) {
+    try {
+      const r = await fetch(`/api/autocomplete?q=${encodeURIComponent(q)}`);
+      const d = await r.json();
+      if (!Array.isArray(d) || !d.length) { hide(); return; }
+      items = d;
+      render();
+    } catch { hide(); }
+  }
+  function render() {
+    activeIdx = -1;
+    dropdown.innerHTML = items.map((it, i) => {
+      const sub = it.city && it.state
+        ? `<span class="ac-secondary">${it.city}${it.state ? ', ' + it.state : ''}${it.postcode ? ' ' + it.postcode : ''}</span>` : '';
+      return `<div class="autocomplete-item" data-idx="${i}">${it.address}${sub}</div>`;
+    }).join('');
+    dropdown.classList.add('visible');
+    dropdown.querySelectorAll('.autocomplete-item').forEach(el => {
+      el.addEventListener('mouseenter', () => { activeIdx = parseInt(el.dataset.idx); hl(); });
+      el.addEventListener('click', () => sel(parseInt(el.dataset.idx)));
+    });
+  }
+  function hl() {
+    dropdown.querySelectorAll('.autocomplete-item').forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+  }
+  function sel(i) {
+    const it = items[i]; if (!it) return;
+    input.value = it.address;
+    hide();
+    stroppSearch();  // auto-search on selection
+  }
+  function hide() {
+    dropdown.classList.remove('visible');
+    dropdown.innerHTML = '';
+    items = []; activeIdx = -1;
+  }
+})();
+
+function exportStroppCsv() {
+  const targetCap = parseFloat($('so_targetCap').value) / 100;
+  const list = stroppState.results.filter(r => (r.capRate || 0) >= targetCap);
+  if (!list.length) return;
+  const cols = ['address','propertyType','bedrooms','bathrooms','sqft','yearBuilt',
+                'price','ltrMonthlyRent','strAnnualRevenue','capRate','monthlyCF','dscr','cocReturn'];
+  const head = ['Address','Type','BR','BA','Sqft','Year','Price','LTR Rent/mo','STR Rev/yr',
+                'Cap Rate','Monthly CF','DSCR','CoC'];
+  const csv = [head.join(',')];
+  for (const r of list) {
+    csv.push(cols.map(c => {
+      let v = r[c];
+      if (typeof v === 'number' && (c === 'capRate' || c === 'cocReturn')) v = (v * 100).toFixed(2) + '%';
+      if (typeof v === 'string' && v.includes(',')) v = '"' + v.replace(/"/g, '""') + '"';
+      return v ?? '';
+    }).join(','));
+  }
+  const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `str-opportunity-${$('so_location').value.replace(/[^\w]+/g, '-')}-${Date.now()}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 
 </script>
 
