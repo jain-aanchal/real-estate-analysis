@@ -1631,6 +1631,7 @@ import {
   rentForBedrooms
 } from './rentcast-opportunity.mjs';
 import { detectMarketType, strDefaults, strAnnualRevenue } from './lib/str-multiplier.mjs';
+import { computeScenarios } from './lib/str-scenarios.mjs';
 
 // Map UI property-type keys (UI uses kebab-case) to RentCast labels.
 const PROPERTY_TYPE_TO_RC = {
@@ -1833,6 +1834,98 @@ app.get('/api/str-opportunity/search', async (req, res) => {
     console.error('[str-opp/search] error:', err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// POST /api/str-opportunity/property
+// Body: { address, price, bedrooms, bathrooms, units, units, strAnnualRevenue, occupancy, marketType }
+// Returns the full Insights payload: property record, STR Low/Mid/High scenarios,
+// nearby comparable sales, and an updated underwriting card.
+app.post('/api/str-opportunity/property', async (req, res) => {
+  const b = req.body || {};
+  if (!b.address) return res.status(400).json({ error: 'address is required' });
+  if (!RENTCAST_API_KEY) return res.status(501).json({ error: 'RENTCAST_API_KEY not configured' });
+
+  const cacheKey = `sopp-prop-${hashKey({ a: b.address, p: b.price })}`;
+  const cached = cacheGet(cacheKey, 24 * 60 * 60);
+  if (cached) return res.json({ ...cached, cached: true });
+
+  const out = {
+    address: b.address,
+    price: Number(b.price) || 0,
+    bedrooms: Number(b.bedrooms) || 0,
+    bathrooms: Number(b.bathrooms) || 0,
+    units: Number(b.units) || 1,
+    strAnnualRevenue: Number(b.strAnnualRevenue) || 0,
+    occupancy: Number(b.occupancy) || 0.60,
+    marketType: b.marketType || 'suburban',
+    record: { owner: {}, tax: {}, lastSale: {} },
+    nearbyComps: [],
+    scenarios: null,
+    sources: []
+  };
+
+  // Step 1: RentCast property record for owner, tax, last sale
+  try {
+    const url = `${RENTCAST_BASE}/properties?address=${encodeURIComponent(b.address)}`;
+    const r = await fetch(url, { headers: { 'X-Api-Key': RENTCAST_API_KEY, 'Accept': 'application/json' } });
+    const data = await r.json();
+    const p = Array.isArray(data) ? data[0] : data;
+    if (r.ok && p) {
+      out.record.owner = {
+        name: p.owner?.names?.[0] || p.owner?.name || '',
+        mailingAddress: p.owner?.mailingAddress || '',
+        ownerOccupied: !!p.ownerOccupied
+      };
+      out.record.tax = {
+        assessedValue: Number(p.taxAssessments?.[Object.keys(p.taxAssessments || {}).slice(-1)[0]]?.value) || 0,
+        annualTax: 0
+      };
+      out.record.lastSale = {
+        price: Number(p.lastSalePrice) || 0,
+        date: p.lastSaleDate || ''
+      };
+      out.lat = Number(p.latitude) || 0;
+      out.lng = Number(p.longitude) || 0;
+      out.yearBuilt = Number(p.yearBuilt) || 0;
+      out.sqft = Number(p.squareFootage) || 0;
+      out.sources.push('rentcast');
+    }
+  } catch (e) {
+    console.warn('[str-opp/property] RentCast lookup failed:', e.message);
+  }
+
+  // Step 2: STR Low/Mid/High scenarios
+  if (out.price > 0 && out.strAnnualRevenue > 0) {
+    out.scenarios = computeScenarios(
+      { price: out.price, units: out.units },
+      out.strAnnualRevenue,
+      out.occupancy
+    );
+  }
+
+  // Step 3: Nearby comp sales — search listings near same zip
+  // (Reuses RentCast /listings/sale with the property's zip to surface a few
+  //  recent comps. This is a best-effort feature; failure is non-fatal.)
+  try {
+    const zip = (b.address.match(/\b(\d{5})\b/) || [])[1];
+    if (zip) {
+      const comps = await rcListingsSale({ zipCode: zip, limit: 8, status: 'Sold' }, RENTCAST_API_KEY).catch(() => []);
+      out.nearbyComps = comps.slice(0, 6).map(c => ({
+        address: c.formattedAddress || c.address || '',
+        price: Number(c.lastSalePrice || c.price) || 0,
+        lastSaleDate: c.lastSaleDate || '',
+        bedrooms: Number(c.bedrooms) || 0,
+        bathrooms: Number(c.bathrooms) || 0,
+        sqft: Number(c.squareFootage) || 0,
+        propertyType: c.propertyType || ''
+      }));
+    }
+  } catch (e) {
+    console.warn('[str-opp/property] comp search failed:', e.message);
+  }
+
+  cacheSet(cacheKey, out);
+  res.json(out);
 });
 
 app.use(express.static(__dirname));
