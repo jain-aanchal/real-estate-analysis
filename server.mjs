@@ -1928,6 +1928,63 @@ app.post('/api/str-opportunity/property', async (req, res) => {
   res.json(out);
 });
 
+// POST /api/str-opportunity/refine
+// Body: { addresses: [...] }
+// Calls the AirROI/AirDNA Rentalizer endpoint (already wired) for each address
+// and returns the precise STR revenue + occupancy estimate.
+// 24-hour per-address cache.
+app.post('/api/str-opportunity/refine', async (req, res) => {
+  const addresses = Array.isArray(req.body?.addresses) ? req.body.addresses : [];
+  if (!addresses.length) return res.status(400).json({ error: 'addresses[] required' });
+  if (addresses.length > 30) return res.status(400).json({ error: 'max 30 addresses per call' });
+
+  if (!AIRROI_API_KEY) {
+    // Graceful degrade — return empty object so client knows to leave badge as ⚪
+    return res.json({});
+  }
+
+  const out = {};
+  // Process in parallel batches of 5 (respect AirROI rate limits)
+  const BATCH = 5;
+  for (let i = 0; i < addresses.length; i += BATCH) {
+    const slice = addresses.slice(i, i + BATCH);
+    const responses = await Promise.allSettled(slice.map(async (address) => {
+      const cacheKey = `sopp-airdna-${hashKey({ a: address })}`;
+      const cached = cacheGet(cacheKey, 24 * 60 * 60);
+      if (cached) return { address, ...cached, cached: true };
+
+      try {
+        const params = new URLSearchParams({
+          address, bedrooms: '2', baths: '2', guests: '4', currency: 'usd'
+        });
+        const r = await fetch(`${AIRROI_BASE}/calculator/estimate?${params}`, {
+          headers: { 'x-api-key': AIRROI_API_KEY, 'Accept': 'application/json' }
+        });
+        if (!r.ok) return { address, error: `HTTP ${r.status}` };
+        const data = await r.json();
+        const d = data.data || data;
+        const result = {
+          adr: Math.round(Number(d.average_daily_rate || d.adr) || 0),
+          occupancy: Number(d.occupancy) || 0,
+          revenue: Math.round(Number(d.revenue || d.annual_revenue) || 0),
+          confidence: 'verified'
+        };
+        cacheSet(cacheKey, result);
+        return { address, ...result };
+      } catch (e) {
+        return { address, error: e.message };
+      }
+    }));
+    for (const r of responses) {
+      if (r.status === 'fulfilled' && r.value?.address) {
+        const { address, ...payload } = r.value;
+        out[address] = payload;
+      }
+    }
+  }
+  res.json(out);
+});
+
 app.use(express.static(__dirname));
 
 // --- Start ---
