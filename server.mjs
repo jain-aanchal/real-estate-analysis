@@ -1699,7 +1699,9 @@ app.get('/api/str-opportunity/search', async (req, res) => {
   if (!RENTCAST_API_KEY) return res.status(501).json({ error: 'RENTCAST_API_KEY not configured' });
 
   const cap = Math.min(parseInt(req.query.cap) || 500, 1000);
-  const targetCap = Math.max(0, Math.min(1, parseFloat(req.query.targetCap) || 0.11));
+  // NOTE: use isFinite to allow 0 as a valid target (`|| 0.11` treats 0 as falsy)
+  const rawTargetCap = parseFloat(req.query.targetCap);
+  const targetCap = Math.max(0, Math.min(1, isFinite(rawTargetCap) ? rawTargetCap : 0.11));
   const radius = parseInt(req.query.radius) || 25;
   let filters = {};
   try { filters = JSON.parse(req.query.filters || '{}'); } catch { /* ignore */ }
