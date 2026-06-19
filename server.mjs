@@ -1618,6 +1618,373 @@ app.post('/api/saved-search/save', async (req, res) => {
   res.json({ ok: true, name });
 });
 
+// ============================================================================
+// STR Opportunity Finder — search endpoint (CTO-130)
+// Returns top N candidates whose underwriting meets a target cap rate.
+// ============================================================================
+import {
+  listingsSale as rcListingsSale,
+  marketByZip as rcMarketByZip,
+  marketByCity as rcMarketByCity,
+  rentAvm as rcRentAvm,
+  normalizeMarket,
+  rentForBedrooms
+} from './rentcast-opportunity.mjs';
+import { detectMarketType, strDefaults, strAnnualRevenue } from './lib/str-multiplier.mjs';
+import { computeScenarios } from './lib/str-scenarios.mjs';
+
+// Map UI property-type keys (UI uses kebab-case) to RentCast labels.
+const PROPERTY_TYPE_TO_RC = {
+  'single-family': 'Single Family',
+  'condo':         'Condo',
+  'townhome':      'Townhouse',
+  'multi-family':  'Multi-Family'
+};
+
+// Parse "Cleveland, OH" / "94401" / "475 Front St, Lahaina, HI" into the
+// fields RentCast's /listings/sale endpoint accepts.
+function parseSearchLocation(location) {
+  const trimmed = String(location || '').trim();
+  // Zip code (5 digits)
+  if (/^\d{5}$/.test(trimmed)) return { kind: 'zip', zipCode: trimmed };
+  // "City, ST" (state can be 2-letter or full name — we accept 2-letter)
+  const cityState = trimmed.match(/^(.+?),\s*([A-Z]{2})\s*(\d{5})?\s*$/i);
+  if (cityState) {
+    return {
+      kind: 'city',
+      city: cityState[1].trim(),
+      state: cityState[2].toUpperCase(),
+      zipCode: cityState[3] || null
+    };
+  }
+  // Full address — caller may provide lat/lng + radius separately
+  return { kind: 'address', raw: trimmed };
+}
+
+// Filter a single RentCast listing against the user-supplied filters block.
+// Returns true if it should be kept.
+function passesFilters(L, f) {
+  if (!f) return true;
+  if (f.types && f.types.length) {
+    const rcType = (L.propertyType || '').toLowerCase();
+    const ok = f.types.some(t => rcType.includes(t.replace('-', ' ')) || rcType.includes(t));
+    if (!ok) return false;
+  }
+  const price = Number(L.price || L.listPrice) || 0;
+  if (f.priceMin && price < f.priceMin) return false;
+  if (f.priceMax && price > f.priceMax) return false;
+  const br = Number(L.bedrooms) || 0;
+  if (f.brMin != null && br < f.brMin) return false;
+  if (f.brMax != null && br > f.brMax) return false;
+  const ba = Number(L.bathrooms) || 0;
+  if (f.baMin != null && ba < f.baMin) return false;
+  if (f.baMax != null && ba > f.baMax) return false;
+  if (f.yearBefore && L.yearBuilt && L.yearBuilt > f.yearBefore) return false;
+  return true;
+}
+
+// GET /api/str-opportunity/search?location=...&filters=<json>&targetCap=0.11&...
+app.get('/api/str-opportunity/search', async (req, res) => {
+  const t0 = Date.now();
+  const location = String(req.query.location || '').trim();
+  if (!location) return res.status(400).json({ error: 'location is required' });
+  if (!RENTCAST_API_KEY) return res.status(501).json({ error: 'RENTCAST_API_KEY not configured' });
+
+  const cap = Math.min(parseInt(req.query.cap) || 500, 1000);
+  const targetCap = Math.max(0, Math.min(1, parseFloat(req.query.targetCap) || 0.11));
+  const radius = parseInt(req.query.radius) || 25;
+  let filters = {};
+  try { filters = JSON.parse(req.query.filters || '{}'); } catch { /* ignore */ }
+
+  // Optional user overrides
+  const overrideMul = req.query.strMultiplier != null ? parseFloat(req.query.strMultiplier) : null;
+  const overrideOcc = req.query.occupancy != null ? parseFloat(req.query.occupancy) : null;
+
+  // Cache key — by location + filters + target cap + result cap + assumptions
+  const cacheKey = `sopp-search-${hashKey({ location, filters, cap, targetCap, radius, overrideMul, overrideOcc })}`;
+  const cached = cacheGet(cacheKey, 60 * 60); // 1hr
+  if (cached) return res.json({ ...cached, cached: true });
+
+  console.log(`[str-opp/search] "${location}" cap=${cap} targetCap=${targetCap}`);
+
+  try {
+    // Step 1: geocode/parse location to RentCast args
+    const loc = parseSearchLocation(location);
+    const listingArgs = { limit: cap, status: 'Active' };
+    if (loc.kind === 'zip') listingArgs.zipCode = loc.zipCode;
+    else if (loc.kind === 'city') {
+      listingArgs.city = loc.city;
+      listingArgs.state = loc.state;
+    } else {
+      // Full address — geocode via Nominatim, then use lat/lng + radius
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&countrycodes=us&limit=1`,
+        { headers: { 'User-Agent': 'RealEstateAnalyzer/1.0' } });
+      if (r.ok) {
+        const arr = await r.json();
+        if (arr?.[0]) {
+          listingArgs.lat = parseFloat(arr[0].lat);
+          listingArgs.lng = parseFloat(arr[0].lon);
+          listingArgs.radius = radius;
+        }
+      }
+      if (!listingArgs.lat) return res.status(404).json({ error: `Could not geocode "${location}"` });
+    }
+
+    // Step 2: Pull active listings
+    const cityHint = loc.city || (loc.kind === 'zip' ? null : location.split(',')[0]);
+    const stateHint = loc.state;
+    const listings = await rcListingsSale(listingArgs, RENTCAST_API_KEY);
+
+    // Step 2b: Look up market rent. Prefer zip-level (more reliable) — derive
+    // the dominant zip from the listings if we don't have one from the query.
+    let marketRaw = null;
+    let marketZip = loc.zipCode || null;
+    if (!marketZip && listings.length) {
+      const zipCounts = {};
+      for (const L of listings) {
+        const z = L.zipCode || L.zip;
+        if (z) zipCounts[z] = (zipCounts[z] || 0) + 1;
+      }
+      marketZip = Object.entries(zipCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+    }
+    if (marketZip) {
+      marketRaw = await rcMarketByZip(marketZip, RENTCAST_API_KEY).catch(() => null);
+    }
+    if (!marketRaw && cityHint && stateHint) {
+      marketRaw = await rcMarketByCity(cityHint, stateHint, RENTCAST_API_KEY).catch(() => null);
+    }
+    const market = normalizeMarket(marketRaw);
+
+    // Step 3: Determine STR assumptions (auto-detect from city or use overrides)
+    const cityForMarket = cityHint || (listings[0]?.city) || '';
+    const strOpts = strDefaults(cityForMarket, {
+      multiplier: overrideMul,
+      occupancy: overrideOcc
+    });
+
+    // Step 4: For each listing, compute UW
+    const candidates = [];
+    for (const L of listings) {
+      if (!passesFilters(L, filters)) continue;
+      const price = Number(L.price || L.listPrice) || 0;
+      if (price <= 0) continue;
+      const bedrooms = Number(L.bedrooms) || 2;
+      const bathrooms = Number(L.bathrooms) || 1;
+      const ltrMonthly = rentForBedrooms(market, bedrooms);
+      if (ltrMonthly <= 0) continue;
+      const strAnnual = strAnnualRevenue(ltrMonthly, strOpts);
+      const uw = computeUnderwriting({
+        price,
+        units: 1,
+        rentPerUnit: strAnnual / 12
+      });
+      candidates.push({
+        id: L.id || `rc-${candidates.length}`,
+        address: L.formattedAddress || L.address || '',
+        lat: Number(L.latitude) || 0,
+        lng: Number(L.longitude) || 0,
+        propertyType: L.propertyType || '',
+        bedrooms,
+        bathrooms,
+        sqft: Number(L.squareFootage) || 0,
+        yearBuilt: Number(L.yearBuilt) || 0,
+        price,
+        lastSalePrice: Number(L.lastSalePrice) || 0,
+        lastSaleDate: L.lastSaleDate || '',
+        listingType: L.listingType || '',
+        daysOnMarket: Number(L.daysOnMarket) || 0,
+        ltrMonthlyRent: ltrMonthly,
+        strAnnualRevenue: Math.round(strAnnual),
+        capRate: uw.capRate,
+        noi: Math.round(uw.noi),
+        monthlyCF: Math.round(uw.monthlyCF),
+        annualCF: Math.round(uw.annualCF),
+        cocReturn: uw.cocReturn,
+        dscr: uw.dscr,
+        targetPriceAtCap: Math.round(uw.targetPriceAtCap),
+        roi: uw.roi,
+        confidence: 'estimated',
+        underwriting: {
+          assumptions: uw.assumptions,
+          monthlyPI: Math.round(uw.monthlyPI),
+          totalOpex: Math.round(uw.totalOpex)
+        }
+      });
+    }
+
+    // Step 5: Filter by target cap; sort by cap desc
+    const meeting = candidates.filter(c => c.capRate >= targetCap)
+                              .sort((a, b) => b.capRate - a.capRate);
+
+    const payload = {
+      results: meeting,
+      totalCandidates: candidates.length,
+      totalScanned: listings.length,
+      marketType: strOpts.marketType,
+      marketEmoji: strOpts.emoji,
+      autoMultiplier: strOpts.multiplier,
+      autoOccupancy: strOpts.occupancy,
+      ltrMedianRent: market?.medianRent || 0,
+      source: 'rentcast',
+      tookMs: Date.now() - t0
+    };
+    cacheSet(cacheKey, payload);
+    res.json(payload);
+  } catch (err) {
+    console.error('[str-opp/search] error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/str-opportunity/property
+// Body: { address, price, bedrooms, bathrooms, units, units, strAnnualRevenue, occupancy, marketType }
+// Returns the full Insights payload: property record, STR Low/Mid/High scenarios,
+// nearby comparable sales, and an updated underwriting card.
+app.post('/api/str-opportunity/property', async (req, res) => {
+  const b = req.body || {};
+  if (!b.address) return res.status(400).json({ error: 'address is required' });
+  if (!RENTCAST_API_KEY) return res.status(501).json({ error: 'RENTCAST_API_KEY not configured' });
+
+  const cacheKey = `sopp-prop-${hashKey({ a: b.address, p: b.price })}`;
+  const cached = cacheGet(cacheKey, 24 * 60 * 60);
+  if (cached) return res.json({ ...cached, cached: true });
+
+  const out = {
+    address: b.address,
+    price: Number(b.price) || 0,
+    bedrooms: Number(b.bedrooms) || 0,
+    bathrooms: Number(b.bathrooms) || 0,
+    units: Number(b.units) || 1,
+    strAnnualRevenue: Number(b.strAnnualRevenue) || 0,
+    occupancy: Number(b.occupancy) || 0.60,
+    marketType: b.marketType || 'suburban',
+    record: { owner: {}, tax: {}, lastSale: {} },
+    nearbyComps: [],
+    scenarios: null,
+    sources: []
+  };
+
+  // Step 1: RentCast property record for owner, tax, last sale
+  try {
+    const url = `${RENTCAST_BASE}/properties?address=${encodeURIComponent(b.address)}`;
+    const r = await fetch(url, { headers: { 'X-Api-Key': RENTCAST_API_KEY, 'Accept': 'application/json' } });
+    const data = await r.json();
+    const p = Array.isArray(data) ? data[0] : data;
+    if (r.ok && p) {
+      out.record.owner = {
+        name: p.owner?.names?.[0] || p.owner?.name || '',
+        mailingAddress: p.owner?.mailingAddress || '',
+        ownerOccupied: !!p.ownerOccupied
+      };
+      out.record.tax = {
+        assessedValue: Number(p.taxAssessments?.[Object.keys(p.taxAssessments || {}).slice(-1)[0]]?.value) || 0,
+        annualTax: 0
+      };
+      out.record.lastSale = {
+        price: Number(p.lastSalePrice) || 0,
+        date: p.lastSaleDate || ''
+      };
+      out.lat = Number(p.latitude) || 0;
+      out.lng = Number(p.longitude) || 0;
+      out.yearBuilt = Number(p.yearBuilt) || 0;
+      out.sqft = Number(p.squareFootage) || 0;
+      out.sources.push('rentcast');
+    }
+  } catch (e) {
+    console.warn('[str-opp/property] RentCast lookup failed:', e.message);
+  }
+
+  // Step 2: STR Low/Mid/High scenarios
+  if (out.price > 0 && out.strAnnualRevenue > 0) {
+    out.scenarios = computeScenarios(
+      { price: out.price, units: out.units },
+      out.strAnnualRevenue,
+      out.occupancy
+    );
+  }
+
+  // Step 3: Nearby comp sales — search listings near same zip
+  // (Reuses RentCast /listings/sale with the property's zip to surface a few
+  //  recent comps. This is a best-effort feature; failure is non-fatal.)
+  try {
+    const zip = (b.address.match(/\b(\d{5})\b/) || [])[1];
+    if (zip) {
+      const comps = await rcListingsSale({ zipCode: zip, limit: 8, status: 'Sold' }, RENTCAST_API_KEY).catch(() => []);
+      out.nearbyComps = comps.slice(0, 6).map(c => ({
+        address: c.formattedAddress || c.address || '',
+        price: Number(c.lastSalePrice || c.price) || 0,
+        lastSaleDate: c.lastSaleDate || '',
+        bedrooms: Number(c.bedrooms) || 0,
+        bathrooms: Number(c.bathrooms) || 0,
+        sqft: Number(c.squareFootage) || 0,
+        propertyType: c.propertyType || ''
+      }));
+    }
+  } catch (e) {
+    console.warn('[str-opp/property] comp search failed:', e.message);
+  }
+
+  cacheSet(cacheKey, out);
+  res.json(out);
+});
+
+// POST /api/str-opportunity/refine
+// Body: { addresses: [...] }
+// Calls the AirROI/AirDNA Rentalizer endpoint (already wired) for each address
+// and returns the precise STR revenue + occupancy estimate.
+// 24-hour per-address cache.
+app.post('/api/str-opportunity/refine', async (req, res) => {
+  const addresses = Array.isArray(req.body?.addresses) ? req.body.addresses : [];
+  if (!addresses.length) return res.status(400).json({ error: 'addresses[] required' });
+  if (addresses.length > 30) return res.status(400).json({ error: 'max 30 addresses per call' });
+
+  if (!AIRROI_API_KEY) {
+    // Graceful degrade — return empty object so client knows to leave badge as ⚪
+    return res.json({});
+  }
+
+  const out = {};
+  // Process in parallel batches of 5 (respect AirROI rate limits)
+  const BATCH = 5;
+  for (let i = 0; i < addresses.length; i += BATCH) {
+    const slice = addresses.slice(i, i + BATCH);
+    const responses = await Promise.allSettled(slice.map(async (address) => {
+      const cacheKey = `sopp-airdna-${hashKey({ a: address })}`;
+      const cached = cacheGet(cacheKey, 24 * 60 * 60);
+      if (cached) return { address, ...cached, cached: true };
+
+      try {
+        const params = new URLSearchParams({
+          address, bedrooms: '2', baths: '2', guests: '4', currency: 'usd'
+        });
+        const r = await fetch(`${AIRROI_BASE}/calculator/estimate?${params}`, {
+          headers: { 'x-api-key': AIRROI_API_KEY, 'Accept': 'application/json' }
+        });
+        if (!r.ok) return { address, error: `HTTP ${r.status}` };
+        const data = await r.json();
+        const d = data.data || data;
+        const result = {
+          adr: Math.round(Number(d.average_daily_rate || d.adr) || 0),
+          occupancy: Number(d.occupancy) || 0,
+          revenue: Math.round(Number(d.revenue || d.annual_revenue) || 0),
+          confidence: 'verified'
+        };
+        cacheSet(cacheKey, result);
+        return { address, ...result };
+      } catch (e) {
+        return { address, error: e.message };
+      }
+    }));
+    for (const r of responses) {
+      if (r.status === 'fulfilled' && r.value?.address) {
+        const { address, ...payload } = r.value;
+        out[address] = payload;
+      }
+    }
+  }
+  res.json(out);
+});
+
 app.use(express.static(__dirname));
 
 // --- Start ---

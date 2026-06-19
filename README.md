@@ -1,10 +1,48 @@
 # Investment Analyzer
 
-Standalone web app for analyzing real-estate investments. Three tabs:
+Standalone web app for analyzing real-estate investments. Four tabs:
 
 1. **🏖️ Short-Term Rental (STR)** — vacation-rental underwriting with Low/Mid/High scenarios, AirDNA Rentalizer PDF import, AirROI / AirDNA / Airbnb comp pulls, target offer-price at 11% cap rate
 2. **🏢 Multi-Family Long-Term Rental (LTR)** — residential/commercial loan logic (>4 units → prime+2% commercial), rent comps, full-history sales pulls, county-recorder deep-links, NOI / CoC / DSCR / 5-yr ROI / target buy price at 15% cap
-3. **🏚️ Distressed Properties** *(new)* — searches off-market and distressed inventory (pre-foreclosure / auction / tax-delinquent) across all 50 US states, with map view, full Insights drawer (Sale Comp / Lease Data / Record), inline underwriting card with live-edit assumptions, Hawaii zoning lookup, optional PropertyRadar feed, Google Drive saved searches
+3. **🏚️ Distressed Properties** — searches off-market and distressed inventory (pre-foreclosure / auction / tax-delinquent) across all 50 US states, with map view, full Insights drawer (Sale Comp / Lease Data / Record), inline underwriting card with live-edit assumptions, Hawaii zoning lookup, optional PropertyRadar feed, Google Drive saved searches
+4. **💎 STR Opportunity Finder** *(new)* — find properties in any US market that pencil as STRs at a target cap rate. Uses RentCast for active listings + LTR market rent, converts to STR revenue via market-type-aware multipliers (vacation 2.5× / metro 1.8× / college 1.5× / suburban 1.4×), and auto-fires AirDNA Rentalizer for top picks (≥ 12% cap) to flip confidence from ⚪ Estimated → 🟢 AirDNA-verified
+
+## 💎 STR Opportunity Finder — Quick Guide
+
+**Search:**
+1. Type a city, zip, or address (autocomplete shows suggestions; picking one auto-fires the search)
+2. For address searches, the radius dropdown lets you widen/narrow (5/10/25/50/100 miles)
+3. Filter by property type, BR/BA, price, year built
+4. Drag the **Target cap rate** slider (default 11%) — re-filtering is instant, no refetch needed
+
+**Market detection:**
+The tab auto-detects market type from the city name (e.g. Lahaina → vacation 🌴 · 2.5× multiplier · 60% occupancy). Auto-detected values appear in the chip at the top of the filter row. Override via the "STR multiplier" and "Occupancy" inputs.
+
+**Confidence badges:**
+- ⚪ Estimated — derived from RentCast Rent Zestimate × multiplier × occupancy
+- ⏳ Refining — AirDNA Rentalizer call in flight
+- 🟢 AirDNA-verified — STR revenue replaced by AirDNA's market-trained estimate (only fires for properties scoring ≥ 12% cap rate)
+
+**Click a row** to open the Insights drawer:
+- **Underwriting card** with live-editable assumptions (multiplier, occupancy, down %, rate, term, vacancy, maintenance %, PM %)
+- **STR Analysis** sub-tab — Low/Mid/High scenarios (Low = ADR×0.8, Occ−10pts · Mid = exact · High = ADR×1.2, Occ+10pts)
+- **Comparable Sales** sub-tab — recent sold properties in same zip
+- **Property Detail** sub-tab — owner, last sale, tax record
+- **"Run AirDNA Rentalizer"** button — manual trigger for properties below the 12% auto-threshold
+
+**Saved searches:** click 💾 Save to persist filters to `localStorage` (also syncs to Google Drive `appDataFolder` if you're signed in via the existing Save-Analysis OAuth).
+
+**CSV export:** all filtered results with full underwriting columns.
+
+**Cost:** ~32 RentCast requests per fresh search (1 listings + 1 market + ≤30 AirDNA refinements). 24-hour per-address cache means repeat searches in the same market cost ~0 marginal requests. RentCast Pro tier (5k/mo) supports ~156 fresh searches/month.
+
+### Backend endpoints used by this tab
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/str-opportunity/search` | Pulls RentCast listings + market rent, applies STR multiplier × occupancy, runs `computeUnderwriting`, filters by target cap, sorts desc |
+| `POST /api/str-opportunity/property` | Full Insights payload: RentCast property record, nearby sold comps, Low/Mid/High scenarios |
+| `POST /api/str-opportunity/refine` | Calls AirROI/AirDNA Rentalizer for up to 30 addresses (24hr per-address cache) |
 
 ## Features
 
