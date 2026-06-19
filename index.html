@@ -5382,10 +5382,76 @@ async function stroppSearch() {
     status.style.color = 'var(--green)';
 
     renderStroppResults();
+
+    // Phase 5: auto-fire AirDNA Rentalizer for top picks (cap ≥ 12%)
+    refineTopPicks();
   } catch (e) {
     status.textContent = '❌ ' + e.message;
     status.style.color = 'var(--red)';
   }
+}
+
+// =====================================================
+// AirDNA refinement for top picks (cap ≥ 12%, CTO-133)
+// Hard cap 30 per search; respect AirDNA rate limits with batches of 5.
+// =====================================================
+async function refineTopPicks() {
+  const targetCap = parseFloat($('so_targetCap').value) / 100;
+  const candidates = stroppState.results
+    .filter(r => (r.capRate || 0) >= Math.max(targetCap, 0.12))
+    .slice(0, 30);
+  if (!candidates.length) return;
+
+  // Update status to show refinement progress
+  const status = $('so_searchStatus');
+  let done = 0;
+  status.textContent += ` · refining ${done}/${candidates.length} via AirDNA…`;
+
+  // Mark candidates as refining (⏳)
+  for (const c of candidates) c.confidence = 'refining';
+  renderStroppResults();
+
+  const BATCH = 5;
+  for (let i = 0; i < candidates.length; i += BATCH) {
+    const slice = candidates.slice(i, i + BATCH);
+    try {
+      const r = await fetch('/api/str-opportunity/refine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addresses: slice.map(s => s.address) })
+      });
+      const d = await r.json();
+      for (const c of slice) {
+        const ai = d?.[c.address];
+        if (ai?.revenue && ai.revenue > 0) {
+          c.strAnnualRevenue = ai.revenue;
+          c.confidence = 'verified';
+          // Quick UW refresh: use the new revenue
+          const newRent = ai.revenue / 12;
+          c.ltrMonthlyRent = newRent;  // not strictly LTR, but used by drawer slider
+          // Recompute cap rate / NOI based on new revenue (lightweight)
+          const opexPct = 0.30;  // 30% of revenue as rough OpEx assumption
+          c.noi = Math.round(ai.revenue * (1 - opexPct) - c.price * 0.011);
+          c.capRate = c.noi / c.price;
+        } else {
+          c.confidence = 'estimated';  // refinement failed/no data
+        }
+        done++;
+      }
+    } catch {
+      // Network failure — leave them as refining/estimated
+      for (const c of slice) {
+        c.confidence = 'estimated';
+        done++;
+      }
+    }
+    // Update status text mid-flight
+    const baseText = status.textContent.replace(/ · refining \d+\/\d+ via AirDNA.*/, '');
+    status.textContent = baseText + ` · refining ${done}/${candidates.length} via AirDNA…`;
+    renderStroppResults();
+  }
+  const baseText = status.textContent.replace(/ · refining \d+\/\d+ via AirDNA.*/, '');
+  status.textContent = baseText + ` · ✓ AirDNA refined ${done} top picks`;
 }
 
 // Column-header sort clicks
