@@ -5357,7 +5357,10 @@ function exportStroppSinglePdf() {
 function buildStroppQuery() {
   const params = new URLSearchParams();
   params.set('location', $('so_location').value.trim());
-  params.set('targetCap', (parseFloat($('so_targetCap').value) / 100).toString());
+  // Always send 0 to the server. The slider is a CLIENT-SIDE filter only —
+  // sending the slider value to the server would limit what gets returned and
+  // would break the "drag slider to see lower caps" UX.
+  params.set('targetCap', '0');
   params.set('cap', $('so_resultCap').value);
   params.set('radius', $('so_radius').value);
   const mul = $('so_multiplier').value;
