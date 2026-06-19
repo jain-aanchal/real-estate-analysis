@@ -1663,17 +1663,25 @@ function parseSearchLocation(location) {
 
 // Filter a single RentCast listing against the user-supplied filters block.
 // Returns true if it should be kept.
+//
+// Unconditional exclusions (cannot be overridden by user filters):
+//   - Land / vacant lots — no structure to STR
+//   - Listings with zero bedrooms (likely land, mobile lots, or bad data)
 function passesFilters(L, f) {
+  // ---- Always exclude land / vacant lots ----
+  const rcType = (L.propertyType || '').toLowerCase();
+  if (/\bland\b|\bvacant\b|\blot\b|\bacreage\b|\bagricult/i.test(rcType)) return false;
+  const br = Number(L.bedrooms) || 0;
+  if (br <= 0) return false;  // STR needs at least one bedroom
+
   if (!f) return true;
   if (f.types && f.types.length) {
-    const rcType = (L.propertyType || '').toLowerCase();
     const ok = f.types.some(t => rcType.includes(t.replace('-', ' ')) || rcType.includes(t));
     if (!ok) return false;
   }
   const price = Number(L.price || L.listPrice) || 0;
   if (f.priceMin && price < f.priceMin) return false;
   if (f.priceMax && price > f.priceMax) return false;
-  const br = Number(L.bedrooms) || 0;
   if (f.brMin != null && br < f.brMin) return false;
   if (f.brMax != null && br > f.brMax) return false;
   const ba = Number(L.bathrooms) || 0;
