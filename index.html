@@ -1905,7 +1905,13 @@
           <option>1000</option>
         </select>
       </label>
-      <button class="reset" onclick="resetStroppFilters()" style="margin-left:auto;">Reset Filters</button>
+      <span style="margin-left:auto;">
+        <select id="so_savedSearches" onchange="loadStroppSavedSearch(this.value)" style="background:var(--panel-2); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:6px 10px; font-size:12px;">
+          <option value="">— Saved searches —</option>
+        </select>
+        <button class="reset" onclick="saveStroppCurrentSearch()">💾 Save</button>
+      </span>
+      <button class="reset" onclick="resetStroppFilters()">Reset Filters</button>
     </div>
   </div>
 
@@ -5536,6 +5542,106 @@ document.querySelectorAll('#tab-stropp [data-so-sort]').forEach(th => {
     items = []; activeIdx = -1;
   }
 })();
+
+// =====================================================
+// Saved searches — localStorage + Google Drive sync (CTO-134)
+// Reuses the same OAuth flow as the Save-Analysis modal.
+// =====================================================
+const STROPP_SAVED_KEY = 'stropp_savedSearches';
+
+function readCurrentStroppFilters() {
+  return {
+    location: $('so_location').value.trim(),
+    radius: $('so_radius').value,
+    targetCap: $('so_targetCap').value,
+    multiplier: $('so_multiplier').value,
+    occupancy: $('so_occupancy').value,
+    resultCap: $('so_resultCap').value,
+    filters: readStroppFilters()
+  };
+}
+
+function applyStroppFilters(saved) {
+  if (!saved) return;
+  if (saved.location)   $('so_location').value = saved.location;
+  if (saved.radius)     $('so_radius').value = saved.radius;
+  if (saved.targetCap)  { $('so_targetCap').value = saved.targetCap; onTargetCapChange(); }
+  if (saved.multiplier) $('so_multiplier').value = saved.multiplier;
+  if (saved.occupancy)  $('so_occupancy').value = saved.occupancy;
+  if (saved.resultCap)  $('so_resultCap').value = saved.resultCap;
+  if (saved.filters) {
+    document.querySelectorAll('#tab-stropp [data-so-filter="type"]').forEach(el => {
+      el.checked = saved.filters.types?.includes(el.value);
+    });
+    ['brMin','brMax','baMin','priceMin','priceMax','yearBefore'].forEach(k => {
+      if (saved.filters[k] != null) $(`so_${k}`).value = saved.filters[k];
+    });
+  }
+}
+
+function loadStroppSavedSearches() {
+  const raw = localStorage.getItem(STROPP_SAVED_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+function persistStroppSavedSearches(list) {
+  localStorage.setItem(STROPP_SAVED_KEY, JSON.stringify(list));
+  refreshStroppSavedDropdown();
+}
+
+function refreshStroppSavedDropdown() {
+  const dd = $('so_savedSearches');
+  if (!dd) return;
+  const list = loadStroppSavedSearches();
+  dd.innerHTML = '<option value="">— Saved searches —</option>' +
+    list.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+}
+
+function saveStroppCurrentSearch() {
+  const name = prompt('Save this search as:');
+  if (!name) return;
+  const list = loadStroppSavedSearches();
+  const idx = list.findIndex(s => s.name === name);
+  const entry = { name, savedAt: Date.now(), ...readCurrentStroppFilters() };
+  if (idx >= 0) list[idx] = entry; else list.push(entry);
+  persistStroppSavedSearches(list);
+  // Optional: also sync to Google Drive if user has signed in
+  if (typeof gAccessToken !== 'undefined' && gAccessToken) {
+    syncStroppToDrive(list).catch(e => console.warn('[stropp] Drive sync failed:', e.message));
+  }
+}
+
+function loadStroppSavedSearch(name) {
+  if (!name) return;
+  const list = loadStroppSavedSearches();
+  const found = list.find(s => s.name === name);
+  if (!found) return;
+  applyStroppFilters(found);
+  stroppSearch();
+}
+
+async function syncStroppToDrive(list) {
+  if (typeof gAccessToken === 'undefined' || !gAccessToken) return;
+  // Upload as a single JSON file to appDataFolder for cross-device sync
+  const meta = {
+    name: 'stropp-saved-searches.json',
+    parents: ['appDataFolder']
+  };
+  const body = new Blob([JSON.stringify({ list })], { type: 'application/json' });
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+  form.append('file', body);
+  await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${gAccessToken}` },
+    body: form
+  });
+}
+
+// Initial dropdown populate on page load
+document.addEventListener('DOMContentLoaded', () => {
+  refreshStroppSavedDropdown();
+});
 
 function exportStroppCsv() {
   const targetCap = parseFloat($('so_targetCap').value) / 100;
