@@ -1043,9 +1043,10 @@
     text-align: center;
     font-size: 12px;
   }
-  .stropp-conf-estimated { color: var(--muted); }
-  .stropp-conf-refining  { color: var(--yellow); }
-  .stropp-conf-verified  { color: var(--green); }
+  .stropp-conf-estimated         { color: var(--muted); }
+  .stropp-conf-airroi-baseline   { color: #93c5fd; }    /* blue — AirROI area median */
+  .stropp-conf-refining          { color: var(--yellow); }
+  .stropp-conf-verified          { color: var(--green); }
   .stropp-search-status {
     font-size: 12px;
     color: var(--muted);
@@ -5056,7 +5057,12 @@ function renderStroppResults() {
   if (!list.length) { tbody.innerHTML = ''; return; }
 
   tbody.innerHTML = list.slice(0, 1000).map((r, i) => {
-    const confIcon = { verified: '🟢', refining: '⏳', estimated: '⚪' }[r.confidence] || '⚪';
+    const confIcon = {
+      verified: '🟢',          // AirROI per-property Rentalizer verified
+      refining: '⏳',
+      'airroi-baseline': '🔵', // AirROI area median for this BR count
+      estimated: '⚪'           // RentCast LTR × heuristic (fallback only)
+    }[r.confidence] || '⚪';
     const confClass = `stropp-conf-${r.confidence}`;
     const cfClass = (r.monthlyCF || 0) > 0 ? 'stropp-cf-good' : 'stropp-cf-bad';
     const dscrClass = (r.dscr || 0) >= 1.25 ? 'stropp-cap-good'

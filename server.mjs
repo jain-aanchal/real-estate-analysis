@@ -1661,6 +1661,112 @@ function parseSearchLocation(location) {
   return { kind: 'address', raw: trimmed };
 }
 
+// ============================================================================
+// AirROI area baseline — fetches up to ~25 STR comparables for the search area
+// and aggregates them into median revenue + occupancy + ADR per bedroom count.
+// This is the primary STR data source for the Opportunity Finder; we use it
+// before falling back to RentCast LTR × multiplier × occupancy heuristic.
+// ============================================================================
+async function fetchAirroiAreaBaseline({ address, bedrooms = 3, bathrooms = 2, guests }) {
+  if (!AIRROI_API_KEY || !address) return null;
+  const cacheKey = `sopp-airroi-area-${hashKey({ a: address })}`;
+  const cached = cacheGet(cacheKey, 60 * 60); // 1hr cache per search area
+  if (cached) return cached;
+
+  const params = new URLSearchParams({
+    address,
+    bedrooms: parseInt(bedrooms) || 3,
+    baths: (parseFloat(bathrooms) || 2).toFixed(1),
+    guests: parseInt(guests) || bedrooms * 2,
+    currency: 'usd'
+  });
+  const url = `${AIRROI_BASE}/listings/comparables?${params}`;
+  try {
+    const r = await fetch(url, { headers: { 'x-api-key': AIRROI_API_KEY, 'Accept': 'application/json' } });
+    if (!r.ok) {
+      console.warn(`[airroi-area] HTTP ${r.status}`);
+      return null;
+    }
+    const data = await r.json();
+    const rawComps = Array.isArray(data) ? data : (data.data || data.listings || data.comparables || []);
+    if (!rawComps.length) return null;
+
+    // Aggregate into per-BR median revenue + occupancy + ADR
+    const byBr = {};   // { 1: [rev,rev,...], 2: [...], ... }
+    const occByBr = {};
+    const adrByBr = {};
+    const allRevs = [];
+    for (const c of rawComps) {
+      const prop = c.property_details || {};
+      const perf = c.performance_metrics || {};
+      const br = Number(prop.bedrooms || prop.beds) || 0;
+      const rev = Number(perf.ttm_revenue || perf.revenue || perf.annual_revenue) || 0;
+      const occRaw = Number(perf.ttm_occupancy || perf.occupancy_rate || perf.occupancy) || 0;
+      const occ = occRaw > 0 && occRaw <= 1 ? occRaw : occRaw / 100;
+      const adr = Number(perf.ttm_avg_rate || perf.avg_daily_rate || perf.adr) || 0;
+      if (rev <= 0) continue;
+      if (!byBr[br]) { byBr[br] = []; occByBr[br] = []; adrByBr[br] = []; }
+      byBr[br].push(rev);
+      if (occ > 0) occByBr[br].push(occ);
+      if (adr > 0) adrByBr[br].push(adr);
+      allRevs.push(rev);
+    }
+    const median = (arr) => {
+      if (!arr || !arr.length) return 0;
+      const s = [...arr].sort((a, b) => a - b);
+      const m = Math.floor(s.length / 2);
+      return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+    };
+    const revByBr = {};
+    const occByBrMedian = {};
+    const adrByBrMedian = {};
+    for (const br of Object.keys(byBr)) {
+      revByBr[br] = median(byBr[br]);
+      occByBrMedian[br] = median(occByBr[br]);
+      adrByBrMedian[br] = median(adrByBr[br]);
+    }
+    const baseline = {
+      revByBr,
+      occByBr: occByBrMedian,
+      adrByBr: adrByBrMedian,
+      overallMedianRev: median(allRevs),
+      compCount: rawComps.length,
+      source: 'airroi'
+    };
+    cacheSet(cacheKey, baseline);
+    console.log(`[airroi-area] ${rawComps.length} comps cached`, Object.keys(revByBr).map(b => `${b}BR=$${Math.round(revByBr[b]).toLocaleString()}`).join(' '));
+    return baseline;
+  } catch (e) {
+    console.warn('[airroi-area] error:', e.message);
+    return null;
+  }
+}
+
+// Look up the AirROI area median revenue for a specific bedroom count.
+// Falls back to overall median × industry per-BR scaling if exact BR missing.
+const BEDROOM_REV_FACTORS = { 0: 0.60, 1: 0.75, 2: 1.00, 3: 1.25, 4: 1.50, 5: 1.75, 6: 2.00, 7: 2.25 };
+function airroiBaselineForBr(baseline, br) {
+  if (!baseline) return null;
+  const exact = baseline.revByBr[br];
+  if (exact > 0) {
+    return {
+      revenue: exact,
+      occupancy: baseline.occByBr[br] || 0.55,
+      adr: baseline.adrByBr[br] || 0
+    };
+  }
+  // Fall back to scaling from overall median
+  if (baseline.overallMedianRev > 0) {
+    const f = BEDROOM_REV_FACTORS[Math.min(7, Math.max(0, Math.round(br)))] || 1;
+    return {
+      revenue: baseline.overallMedianRev * f / (BEDROOM_REV_FACTORS[2] || 1),  // normalize to 2BR baseline
+      occupancy: 0.55,
+      adr: 0
+    };
+  }
+  return null;
+}
+
 // Filter a single RentCast listing against the user-supplied filters block.
 // Returns true if it should be kept.
 //
@@ -1772,8 +1878,22 @@ app.get('/api/str-opportunity/search', async (req, res) => {
       occupancy: overrideOcc
     });
 
+    // Step 3b: AirROI area baseline — primary STR data source.
+    // Single call returns ~25 actual STR comparables; we group by BR and use
+    // median revenue as the baseline for every RentCast listing.
+    const sampleAddress = listings[0]?.formattedAddress || listings[0]?.address || location;
+    const sampleBr = Number(listings[0]?.bedrooms) || 3;
+    const sampleBa = Number(listings[0]?.bathrooms) || 2;
+    const airroiBaseline = await fetchAirroiAreaBaseline({
+      address: sampleAddress,
+      bedrooms: sampleBr,
+      bathrooms: sampleBa,
+      guests: sampleBr * 2
+    });
+
     // Step 4: For each listing, compute UW
     const candidates = [];
+    let airroiCount = 0, heuristicCount = 0;
     for (const L of listings) {
       if (!passesFilters(L, filters)) continue;
       const price = Number(L.price || L.listPrice) || 0;
@@ -1782,7 +1902,23 @@ app.get('/api/str-opportunity/search', async (req, res) => {
       const bathrooms = Number(L.bathrooms) || 1;
       const ltrMonthly = rentForBedrooms(market, bedrooms);
       if (ltrMonthly <= 0) continue;
-      const strAnnual = strAnnualRevenue(ltrMonthly, strOpts);
+
+      // Primary: AirROI-derived baseline by BR count.
+      // Fallback: RentCast LTR × multiplier × occupancy heuristic.
+      let strAnnual, strOcc, strConfidence;
+      const air = airroiBaselineForBr(airroiBaseline, bedrooms);
+      if (air && air.revenue > 0) {
+        strAnnual = air.revenue;
+        strOcc = air.occupancy;
+        strConfidence = 'airroi-baseline';
+        airroiCount++;
+      } else {
+        strAnnual = strAnnualRevenue(ltrMonthly, strOpts);
+        strOcc = strOpts.occupancy;
+        strConfidence = 'estimated';
+        heuristicCount++;
+      }
+
       const uw = computeUnderwriting({
         price,
         units: 1,
@@ -1805,7 +1941,8 @@ app.get('/api/str-opportunity/search', async (req, res) => {
         daysOnMarket: Number(L.daysOnMarket) || 0,
         ltrMonthlyRent: ltrMonthly,
         strAnnualRevenue: Math.round(strAnnual),
-        occupancy: strOpts.occupancy,   // 0-1 decimal; AirDNA refinement overrides per-row
+        occupancy: strOcc,              // 0-1 decimal; from AirROI or auto-detected
+        confidence: strConfidence,      // 'airroi-baseline' | 'estimated'  (refinement → 'verified')
         capRate: uw.capRate,
         noi: Math.round(uw.noi),
         monthlyCF: Math.round(uw.monthlyCF),
@@ -1814,7 +1951,6 @@ app.get('/api/str-opportunity/search', async (req, res) => {
         dscr: uw.dscr,
         targetPriceAtCap: Math.round(uw.targetPriceAtCap),
         roi: uw.roi,
-        confidence: 'estimated',
         underwriting: {
           assumptions: uw.assumptions,
           monthlyPI: Math.round(uw.monthlyPI),
@@ -1836,7 +1972,14 @@ app.get('/api/str-opportunity/search', async (req, res) => {
       autoMultiplier: strOpts.multiplier,
       autoOccupancy: strOpts.occupancy,
       ltrMedianRent: market?.medianRent || 0,
-      source: 'rentcast',
+      airroiBaseline: airroiBaseline ? {
+        compCount: airroiBaseline.compCount,
+        revByBr: airroiBaseline.revByBr,
+        occByBr: airroiBaseline.occByBr,
+        used: airroiCount,
+        fellBack: heuristicCount
+      } : null,
+      source: airroiBaseline ? 'rentcast+airroi' : 'rentcast',
       tookMs: Date.now() - t0
     };
     cacheSet(cacheKey, payload);
