@@ -1889,6 +1889,8 @@
       <span class="cap-value" id="so_targetCapDisplay">11.0%</span>
       <label style="margin-left:24px;">Min DSCR:</label>
       <input type="number" id="so_minDscr" step="0.05" min="0" max="5" placeholder="any" style="width:90px;" oninput="renderStroppResults()" />
+      <label style="margin-left:18px;">Min Occupancy %:</label>
+      <input type="number" id="so_minOcc" step="1" min="0" max="100" placeholder="any" style="width:90px;" oninput="renderStroppResults()" />
     </div>
 
     <div class="filter-row">
@@ -4994,7 +4996,7 @@ function resetStroppFilters() {
     el.checked = (i < 3); // first 3 (SFR/Condo/Townhome) on by default
   });
   ['so_brMin','so_brMax','so_baMin','so_priceMin','so_priceMax','so_yearBefore',
-   'so_multiplier','so_occupancy','so_minDscr'].forEach(id => $(id) && ($(id).value = ''));
+   'so_multiplier','so_occupancy','so_minDscr','so_minOcc'].forEach(id => $(id) && ($(id).value = ''));
   $('so_radius').value = '25';
   $('so_targetCap').value = 11;
   $('so_targetCapDisplay').textContent = '11.0%';
@@ -5029,10 +5031,15 @@ function renderStroppResults() {
   if (!tbody) return;
   const targetCap = parseFloat($('so_targetCap').value) / 100;
   const minDscr = numOrNull('so_minDscr');
+  const minOcc = numOrNull('so_minOcc');
 
-  // Filter to meet target cap + min DSCR, then sort by current field/direction
+  // Filter: target cap + min DSCR + min Occupancy, then sort
   let list = stroppState.results.filter(r => (r.capRate || 0) >= targetCap);
   if (minDscr != null) list = list.filter(r => (r.dscr || 0) >= minDscr);
+  if (minOcc != null) {
+    const occThresh = minOcc / 100;  // input is %, stored as decimal
+    list = list.filter(r => (r.occupancy || 0) >= occThresh);
+  }
   const f = stroppState.sortField, d = stroppState.sortDir === 'asc' ? 1 : -1;
   list = [...list].sort((a, b) => {
     const av = a[f] ?? 0, bv = b[f] ?? 0;
@@ -5041,8 +5048,9 @@ function renderStroppResults() {
   });
 
   const dscrText = minDscr != null ? ` & DSCR ≥ ${minDscr.toFixed(2)}` : '';
+  const occText = minOcc != null ? ` & Occ ≥ ${minOcc}%` : '';
   $('so_resultCount').textContent =
-    `${list.length} properties meet target cap${dscrText} (of ${stroppState.results.length} candidates)`;
+    `${list.length} properties meet target cap${dscrText}${occText} (of ${stroppState.results.length} candidates)`;
   $('so_exportBtn').disabled = list.length === 0;
 
   if (!list.length) { tbody.innerHTML = ''; return; }
@@ -5437,6 +5445,7 @@ async function refineTopPicks() {
         if (ai?.revenue && ai.revenue > 0) {
           c.strAnnualRevenue = ai.revenue;
           c.confidence = 'verified';
+          if (ai.occupancy != null) c.occupancy = ai.occupancy;  // AirDNA-verified per-property occupancy
           // Quick UW refresh: use the new revenue
           const newRent = ai.revenue / 12;
           c.ltrMonthlyRent = newRent;  // not strictly LTR, but used by drawer slider
@@ -5560,6 +5569,7 @@ function readCurrentStroppFilters() {
     radius: $('so_radius').value,
     targetCap: $('so_targetCap').value,
     minDscr: $('so_minDscr').value,
+    minOcc: $('so_minOcc').value,
     multiplier: $('so_multiplier').value,
     occupancy: $('so_occupancy').value,
     resultCap: $('so_resultCap').value,
@@ -5573,6 +5583,7 @@ function applyStroppFilters(saved) {
   if (saved.radius)     $('so_radius').value = saved.radius;
   if (saved.targetCap)  { $('so_targetCap').value = saved.targetCap; onTargetCapChange(); }
   if (saved.minDscr != null) $('so_minDscr').value = saved.minDscr;
+  if (saved.minOcc != null) $('so_minOcc').value = saved.minOcc;
   if (saved.multiplier) $('so_multiplier').value = saved.multiplier;
   if (saved.occupancy)  $('so_occupancy').value = saved.occupancy;
   if (saved.resultCap)  $('so_resultCap').value = saved.resultCap;
@@ -5653,8 +5664,10 @@ document.addEventListener('DOMContentLoaded', () => {
 function exportStroppCsv() {
   const targetCap = parseFloat($('so_targetCap').value) / 100;
   const minDscr = numOrNull('so_minDscr');
+  const minOcc = numOrNull('so_minOcc');
   let list = stroppState.results.filter(r => (r.capRate || 0) >= targetCap);
   if (minDscr != null) list = list.filter(r => (r.dscr || 0) >= minDscr);
+  if (minOcc != null) list = list.filter(r => (r.occupancy || 0) >= minOcc / 100);
   if (!list.length) return;
   const cols = ['address','propertyType','bedrooms','bathrooms','sqft','yearBuilt',
                 'price','ltrMonthlyRent','strAnnualRevenue','capRate','monthlyCF','dscr','cocReturn'];

@@ -1803,6 +1803,7 @@ app.get('/api/str-opportunity/search', async (req, res) => {
         daysOnMarket: Number(L.daysOnMarket) || 0,
         ltrMonthlyRent: ltrMonthly,
         strAnnualRevenue: Math.round(strAnnual),
+        occupancy: strOpts.occupancy,   // 0-1 decimal; AirDNA refinement overrides per-row
         capRate: uw.capRate,
         noi: Math.round(uw.noi),
         monthlyCF: Math.round(uw.monthlyCF),
