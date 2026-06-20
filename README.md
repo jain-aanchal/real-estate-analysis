@@ -50,7 +50,7 @@ Every tab uses the same source for the same use case. When extending the tool, f
 
 | Data type | Primary | Fallback | Used by |
 |---|---|---|---|
-| **Active for-sale listings** | Realtor16 (Realtor.com via RapidAPI) | RentCast `/listings/sale` | STR Opportunity Finder search |
+| **Active for-sale listings** | Realtor16 (RapidAPI) | Realty-in-US (RapidAPI, same key) → RentCast `/listings/sale` | STR Opportunity Finder search. Realty-in-US adds native server-side keyword filtering (water_view / city_view / hill_or_mountain_view / community_park) when scenic-view pills are checked. |
 | **Single-listing URL parse** | Realtor16 (for `realtor.com` URLs) | Playwright scraper (Redfin / Zillow / generic) | STR + LTR tabs "Pull from Listing" |
 | **LTR rent estimates** | RentCast `/avm/rent/long-term` + `/markets` | — | LTR tab + STR Opp Finder (rent baseline) |
 | **STR revenue estimates** | AirROI `/listings/comparables` + `/calculator/estimate` | RentCast LTR × multiplier × occupancy heuristic | STR tab + STR Opp Finder |
