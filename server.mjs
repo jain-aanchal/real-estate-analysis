@@ -825,12 +825,69 @@ app.post('/api/listing/parse', async (req, res) => {
   if (!url) return res.status(400).json({ error: 'url is required' });
   if (!/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'url must start with http(s)://' });
 
+  // Fast path: Realtor.com URLs → Realtor16 API (no Playwright).
+  // Parses much faster (~500ms vs ~5s) and gives richer data (photos, list date).
+  if (/realtor\.com/i.test(url) && REALTOR16_RAPIDAPI_KEY) {
+    try {
+      const propIdMatch = url.match(/_M(\d+)-?(\d+)?/);
+      const propertyId = propIdMatch ? (propIdMatch[1] + (propIdMatch[2] || '')) : null;
+      const rt16Url = propertyId
+        ? `https://realtor16.p.rapidapi.com/property/details?property_id=${propertyId}`
+        : `https://realtor16.p.rapidapi.com/property/details?url=${encodeURIComponent(url)}`;
+      const r = await fetch(rt16Url, {
+        headers: {
+          'x-rapidapi-host': 'realtor16.p.rapidapi.com',
+          'x-rapidapi-key': REALTOR16_RAPIDAPI_KEY,
+          'Accept': 'application/json'
+        }
+      });
+      if (r.ok) {
+        const data = await r.json();
+        const p = data?.data || data?.properties?.[0] || data;
+        if (p) {
+          const loc = p.location?.address || {};
+          const desc = p.description || {};
+          const street = loc.line || '';
+          const city = loc.city || '';
+          const state = loc.state_code || loc.state || '';
+          const zip = loc.postal_code || '';
+          const out = {
+            price: Number(p.list_price || p.price || 0) || 0,
+            address: [street, city, state].filter(Boolean).join(', ') + (zip ? ` ${zip}` : ''),
+            bedrooms: Number(desc.beds || desc.beds_min || 0) || 0,
+            bathrooms: parseFloat(desc.baths_consolidated || desc.baths || 0) || 0,
+            sqft: Number(desc.sqft || desc.living_area || 0) || 0,
+            yearBuilt: Number(desc.year_built || 0) || 0,
+            lotSize: Number(desc.lot_sqft || 0) || 0,
+            hoaMonthly: Number(p.hoa?.fee || desc.hoa_fee || 0) || 0,
+            taxAnnual: Number(p.tax_history?.[0]?.tax || 0) || 0,
+            taxRate: 0,
+            photoUrl: p.primary_photo?.href || (p.photos?.[0]?.href) || '',
+            permalink: p.permalink ? `https://www.realtor.com/realestateandhomes-detail/${p.permalink}` : url,
+            source: 'realtor16',
+            url
+          };
+          if (out.taxAnnual && out.price) {
+            out.taxRate = +((out.taxAnnual / out.price) * 100).toFixed(3);
+          }
+          if (out.price > 0 || out.bedrooms > 0) {
+            console.log('[listing/parse] realtor16 OK:', { price: out.price, br: out.bedrooms, ba: out.bathrooms });
+            return res.json(out);
+          }
+        }
+      }
+      console.warn('[listing/parse] realtor16 returned no data, falling back to Playwright');
+    } catch (e) {
+      console.warn('[listing/parse] realtor16 failed, falling back:', e.message);
+    }
+  }
+
   const playwrightInstalled = existsSync(join(__dirname, 'node_modules', 'playwright'));
   if (!playwrightInstalled) {
     return res.status(501).json({ error: 'Playwright not installed. Run: npm run install-scraper' });
   }
 
-  console.log(`[listing/parse] ${url}`);
+  console.log(`[listing/parse] ${url} (Playwright fallback)`);
   const child = spawn('node', ['listing-scraper.mjs', '--url', url], { cwd: __dirname });
   let stdout = '', stderr = '';
   child.stdout.on('data', c => stdout += c.toString());
@@ -1982,6 +2039,12 @@ app.get('/api/str-opportunity/search', async (req, res) => {
         strAnnualRevenue: Math.round(strAnnual),
         occupancy: strOcc,              // 0-1 decimal; from AirROI or auto-detected
         confidence: strConfidence,      // 'airroi-baseline' | 'estimated'  (refinement → 'verified')
+        // Realtor16 extras (when source is realtor16)
+        photoUrl: L.photoUrl || '',
+        permalink: L.permalink || '',
+        listDate: L.listDate || '',
+        priceReduced: Number(L.priceReduced) || 0,
+        listingStatus: L.status || '',
         capRate: uw.capRate,
         noi: Math.round(uw.noi),
         monthlyCF: Math.round(uw.monthlyCF),

@@ -5068,11 +5068,23 @@ function renderStroppResults() {
     const dscrClass = (r.dscr || 0) >= 1.25 ? 'stropp-cap-good'
                     : (r.dscr || 0) >= 1.0  ? 'stropp-cap-warn'
                     : 'stropp-cap-bad';
+    // Price-cut badge — Realtor16 exposes a 'priceReduced' delta
+    const cutBadge = (r.priceReduced && r.priceReduced > 0)
+      ? `<span title="Price reduced by $${r.priceReduced.toLocaleString()}" style="display:inline-block; background:rgba(239,68,68,0.15); color:#fca5a5; border-radius:8px; padding:1px 6px; font-size:10px; font-weight:600; margin-left:4px;">↓ $${Math.round(r.priceReduced/1000)}K</span>`
+      : '';
+    // "Just listed" badge — listed in last 7 days (Realtor16's listDate)
+    let newBadge = '';
+    if (r.listDate) {
+      const daysAgo = Math.floor((Date.now() - new Date(r.listDate).getTime()) / (1000 * 60 * 60 * 24));
+      if (daysAgo >= 0 && daysAgo <= 7) {
+        newBadge = `<span title="Listed ${daysAgo} day${daysAgo === 1 ? '' : 's'} ago" style="display:inline-block; background:rgba(16,185,129,0.18); color:#6ee7b7; border-radius:8px; padding:1px 6px; font-size:10px; font-weight:600; margin-left:4px;">NEW</span>`;
+      }
+    }
     return `<tr data-so-id="${r.id}" onclick="openStroppDrawer('${r.id}')">
       <td><input type="checkbox" /></td>
       <td>${i + 1}</td>
       <td><span class="stropp-conf ${confClass}">${confIcon}</span></td>
-      <td>${(r.address || '').slice(0, 50)}</td>
+      <td>${(r.address || '').slice(0, 50)}${newBadge}${cutBadge}</td>
       <td>${r.propertyType || '—'}</td>
       <td>${r.bedrooms || '?'}/${r.bathrooms || '?'}</td>
       <td class="right">${r.sqft ? r.sqft.toLocaleString() : '—'}</td>
@@ -5100,7 +5112,17 @@ async function openStroppDrawer(id) {
   _soActiveProperty = r;
 
   // Open drawer immediately with what we have, then fetch detail in background
-  $('soDrawerTitle').textContent = r.address || 'Property';
+  let title = r.address || 'Property';
+  // Inject photo thumbnail + Realtor.com link when we have them
+  if (r.photoUrl) {
+    title = `<div style="display:flex; gap:10px; align-items:center;">
+      <img src="${r.photoUrl}" style="width:64px; height:48px; object-fit:cover; border-radius:6px; border:1px solid var(--border);" alt="" />
+      <div style="font-size:13px;">${r.address || 'Property'}${r.permalink ? `<br><a href="${r.permalink}" target="_blank" rel="noopener" style="font-size:11px; color:#93c5fd;">View on Realtor.com ↗</a>` : ''}</div>
+    </div>`;
+  } else if (r.permalink) {
+    title = `${r.address || 'Property'} <a href="${r.permalink}" target="_blank" rel="noopener" style="font-size:11px; color:#93c5fd; margin-left:6px;">↗</a>`;
+  }
+  $('soDrawerTitle').innerHTML = title;
   $('stroppDrawer').classList.add('open');
   renderStroppUwCard(r);
 
@@ -5424,7 +5446,11 @@ async function stroppSearch() {
       ed.textContent = `Market: ${d.marketType} ${d.marketEmoji || ''} · multiplier ${d.autoMultiplier}× · occ ${Math.round((d.autoOccupancy || 0) * 100)}%`;
     }
 
-    status.textContent = `✓ ${stroppState.results.length} candidates · scanned ${d.totalScanned} · ${d.tookMs}ms${d.cached ? ' (cached)' : ''}`;
+    // Build status with source breakdown so it's obvious which APIs are providing data
+    const listingsTag = d.listingsSource === 'realtor16' ? '🏠 Realtor.com' : '📋 RentCast';
+    const strTag = d.airroiBaseline ? '🔵 AirROI' : '⚪ Heuristic';
+    const totalMarket = d.totalAvailable ? ` of ${d.totalAvailable.toLocaleString()} active` : '';
+    status.textContent = `✓ ${stroppState.results.length} candidates${totalMarket} · listings: ${listingsTag} · STR: ${strTag} · ${d.tookMs}ms${d.cached ? ' (cached)' : ''}`;
     status.style.color = 'var(--green)';
 
     renderStroppResults();
