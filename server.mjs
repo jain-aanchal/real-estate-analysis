@@ -1999,6 +1999,13 @@ app.get('/api/str-opportunity/search', async (req, res) => {
           listings = result.listings;
           totalAvailable = result.total || listings.length;
           listingsSource = 'realty-in-us';
+          // Realty-in-US's list endpoint does not return description text, so the
+          // client can't run its own description-regex view filter. If we sent
+          // views server-side, tag each result so the client trusts the match
+          // and skips re-filtering.
+          if (args.views && args.views.length) {
+            for (const L of listings) L._viewsServerFiltered = true;
+          }
           console.log(`[str-opp/search] Realty-in-US returned ${listings.length} listings (${totalAvailable} total)`);
         }
       } catch (e) {
@@ -2144,6 +2151,9 @@ app.get('/api/str-opportunity/search', async (req, res) => {
         searchable: L.searchable || `${(L.formattedAddress || L.address || '').toLowerCase()} ${(L.propertyType || '').toLowerCase()}`,
         description: L.description || '',
         tags: L.tags || '',
+        // Set when listing source already applied a server-side view filter
+        // (e.g., Realty-in-US's keywords[] param). Client trusts the match.
+        _viewsServerFiltered: !!L._viewsServerFiltered,
         capRate: uw.capRate,
         noi: Math.round(uw.noi),
         monthlyCF: Math.round(uw.monthlyCF),
