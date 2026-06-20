@@ -1893,10 +1893,10 @@
 
     <div class="filter-row">
       <span style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px;">View:</span>
-      <label class="filter-pill"><input type="checkbox" data-so-view="water" onchange="onStroppViewChange()" /> 🌊 Water</label>
-      <label class="filter-pill"><input type="checkbox" data-so-view="city" onchange="onStroppViewChange()" /> 🏙️ City</label>
-      <label class="filter-pill"><input type="checkbox" data-so-view="mountain" onchange="onStroppViewChange()" /> 🏔️ Mountain</label>
-      <label class="filter-pill"><input type="checkbox" data-so-view="park" onchange="onStroppViewChange()" /> 🌳 Park</label>
+      <label class="filter-pill"><input type="checkbox" data-so-view="water" oninput="renderStroppResults()" /> 🌊 Water</label>
+      <label class="filter-pill"><input type="checkbox" data-so-view="city" oninput="renderStroppResults()" /> 🏙️ City</label>
+      <label class="filter-pill"><input type="checkbox" data-so-view="mountain" oninput="renderStroppResults()" /> 🏔️ Mountain</label>
+      <label class="filter-pill"><input type="checkbox" data-so-view="park" oninput="renderStroppResults()" /> 🌳 Park</label>
       <span class="small-note">OR logic — property matches if any selected view appears in the listing text</span>
     </div>
 
@@ -5031,18 +5031,6 @@ function onTargetCapChange() {
   renderStroppResults();
 }
 
-// Toggling view pills re-fires the search so Realty-in-US can apply its
-// server-side keyword filter (water_view, hill_or_mountain_view, etc.).
-// Without a refetch the client would only see the previously cached rows
-// which were filtered for the previous view selection.
-function onStroppViewChange() {
-  if (stroppState.results.length && $('so_location').value.trim()) {
-    stroppSearch();
-  } else {
-    renderStroppResults();
-  }
-}
-
 // Cap rate cell color class
 function capClass(capRate) {
   if (capRate >= 0.11) return 'stropp-cap-good';
@@ -5092,13 +5080,8 @@ function renderStroppResults() {
     });
   }
   if (views.length) {
-    // If the server already applied the view filter (e.g., Realty-in-US's
-    // keywords[] param), trust the match — Realty-in-US's list endpoint
-    // doesn't return description text, so the client regex would always
-    // fail against an empty haystack. Otherwise fall back to a client-side
-    // description regex (works only when source provides description text).
+    // ANY checked view must match (OR logic)
     list = list.filter(r => {
-      if (r._viewsServerFiltered) return true;
       const hay = (r.searchable || r.address || '').toLowerCase();
       return views.some(v => VIEW_PATTERNS[v] && VIEW_PATTERNS[v].test(hay));
     });

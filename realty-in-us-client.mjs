@@ -133,20 +133,13 @@ export function viewsToRiuKeywords(views = []) {
 }
 
 // Search for-sale listings.
-// Accepts: { city, state, zipCode, searchAddress, lat, lng, radius, limit, views, keywords }
-//
-// Location precedence:
-//   zipCode → postal_code filter
-//   city + state → city + state_code filter
-//   searchAddress → search_location with a real address string (Realtor.com
-//                    geocodes it server-side; lat,lng coordinates DON'T work)
+// Accepts: { city, state, zipCode, lat, lng, radius, limit, views, keywords, sortField }
 export async function forSale({
   city, state, zipCode,
-  searchAddress,  // e.g. "475 Front St, Lahaina, HI" — Realty-in-US geocodes it
   lat, lng, radius = 25,
   limit = 200, offset = 0,
-  views,
-  keywords,
+  views,          // ['water', 'city', ...] → maps to RIU keywords
+  keywords,       // explicit RIU keywords (overrides views)
   sortField = 'list_date',
   sortDir = 'desc'
 } = {}, key) {
@@ -161,11 +154,7 @@ export async function forSale({
   else if (city && state) {
     body.city = city;
     body.state_code = state.toUpperCase();
-  } else if (searchAddress) {
-    body.search_location = { radius, location: searchAddress };
   } else if (lat != null && lng != null) {
-    // Coordinates as a fallback only — Realty-in-US does not consistently
-    // geocode these. Prefer searchAddress when available.
     body.search_location = { radius, location: `${lat},${lng}` };
   }
 

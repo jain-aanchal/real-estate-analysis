@@ -1711,28 +1711,12 @@ const PROPERTY_TYPE_TO_RC = {
 
 // Parse "Cleveland, OH" / "94401" / "475 Front St, Lahaina, HI" into the
 // fields RentCast's /listings/sale endpoint accepts.
-// US state full name → 2-letter abbreviation. Covers all 50 + DC + PR.
-const STATE_NAME_TO_CODE = {
-  'alabama':'AL','alaska':'AK','arizona':'AZ','arkansas':'AR','california':'CA',
-  'colorado':'CO','connecticut':'CT','delaware':'DE','florida':'FL','georgia':'GA',
-  'hawaii':'HI','idaho':'ID','illinois':'IL','indiana':'IN','iowa':'IA',
-  'kansas':'KS','kentucky':'KY','louisiana':'LA','maine':'ME','maryland':'MD',
-  'massachusetts':'MA','michigan':'MI','minnesota':'MN','mississippi':'MS','missouri':'MO',
-  'montana':'MT','nebraska':'NE','nevada':'NV','new hampshire':'NH','new jersey':'NJ',
-  'new mexico':'NM','new york':'NY','north carolina':'NC','north dakota':'ND','ohio':'OH',
-  'oklahoma':'OK','oregon':'OR','pennsylvania':'PA','rhode island':'RI','south carolina':'SC',
-  'south dakota':'SD','tennessee':'TN','texas':'TX','utah':'UT','vermont':'VT',
-  'virginia':'VA','washington':'WA','west virginia':'WV','wisconsin':'WI','wyoming':'WY',
-  'district of columbia':'DC','puerto rico':'PR'
-};
-
 function parseSearchLocation(location) {
   const trimmed = String(location || '').trim();
   // Zip code (5 digits)
   if (/^\d{5}$/.test(trimmed)) return { kind: 'zip', zipCode: trimmed };
-  // "City, ST" — 2-letter state. Exclude comma from city so multi-comma
-  // strings like "475 Front St, Lahaina, HI" don't match (those are addresses).
-  const cityState = trimmed.match(/^([^,]+?),\s*([A-Z]{2})\s*(\d{5})?\s*$/i);
+  // "City, ST" (state can be 2-letter or full name — we accept 2-letter)
+  const cityState = trimmed.match(/^(.+?),\s*([A-Z]{2})\s*(\d{5})?\s*$/i);
   if (cityState) {
     return {
       kind: 'city',
@@ -1740,19 +1724,6 @@ function parseSearchLocation(location) {
       state: cityState[2].toUpperCase(),
       zipCode: cityState[3] || null
     };
-  }
-  // "City, FullStateName" — e.g. "Kihei, Hawaii"
-  const cityFullState = trimmed.match(/^([^,]+?),\s*([A-Za-z][A-Za-z\s]+?)\s*(\d{5})?\s*$/);
-  if (cityFullState) {
-    const code = STATE_NAME_TO_CODE[cityFullState[2].toLowerCase().trim()];
-    if (code) {
-      return {
-        kind: 'city',
-        city: cityFullState[1].trim(),
-        state: code,
-        zipCode: cityFullState[3] || null
-      };
-    }
   }
   // Full address — caller may provide lat/lng + radius separately
   return { kind: 'address', raw: trimmed };
@@ -1984,11 +1955,9 @@ app.get('/api/str-opportunity/search', async (req, res) => {
         const args = { limit: cap };
         if (loc.kind === 'zip') args.zipCode = loc.zipCode;
         else if (loc.kind === 'city') { args.city = loc.city; args.state = loc.state; }
-        else if (loc.kind === 'address') {
-          // Realty-in-US's search_location.location wants an ADDRESS STRING
-          // (e.g. "475 Front St, Lahaina, HI"), NOT lat/lng coordinates.
-          // Pass the raw user query through — Realtor.com's geocoder handles it.
-          args.searchAddress = location;
+        else if (loc.kind === 'address' && listingArgs.lat) {
+          args.lat = listingArgs.lat;
+          args.lng = listingArgs.lng;
           args.radius = radius;
         }
         // Pass user's view selection through to Realty-in-US for native
@@ -1999,13 +1968,6 @@ app.get('/api/str-opportunity/search', async (req, res) => {
           listings = result.listings;
           totalAvailable = result.total || listings.length;
           listingsSource = 'realty-in-us';
-          // Realty-in-US's list endpoint does not return description text, so the
-          // client can't run its own description-regex view filter. If we sent
-          // views server-side, tag each result so the client trusts the match
-          // and skips re-filtering.
-          if (args.views && args.views.length) {
-            for (const L of listings) L._viewsServerFiltered = true;
-          }
           console.log(`[str-opp/search] Realty-in-US returned ${listings.length} listings (${totalAvailable} total)`);
         }
       } catch (e) {
@@ -2151,9 +2113,6 @@ app.get('/api/str-opportunity/search', async (req, res) => {
         searchable: L.searchable || `${(L.formattedAddress || L.address || '').toLowerCase()} ${(L.propertyType || '').toLowerCase()}`,
         description: L.description || '',
         tags: L.tags || '',
-        // Set when listing source already applied a server-side view filter
-        // (e.g., Realty-in-US's keywords[] param). Client trusts the match.
-        _viewsServerFiltered: !!L._viewsServerFiltered,
         capRate: uw.capRate,
         noi: Math.round(uw.noi),
         monthlyCF: Math.round(uw.monthlyCF),
