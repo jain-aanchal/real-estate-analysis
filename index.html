@@ -5468,9 +5468,16 @@ async function stroppSearch() {
 // Hard cap 30 per search; respect AirDNA rate limits with batches of 5.
 // =====================================================
 async function refineTopPicks() {
-  const targetCap = parseFloat($('so_targetCap').value) / 100;
-  const candidates = stroppState.results
-    .filter(r => (r.capRate || 0) >= Math.max(targetCap, 0.12))
+  // Refine the top 30 properties by cap rate, regardless of absolute level.
+  // Reason: AirROI's AREA-MEDIAN baseline (used for unrefined rows) can be
+  // significantly off for individual properties — high in markets with
+  // luxury comp distortion (Yosemite cabins, Lahaina ocean-view condos),
+  // low in markets where this specific property is above the median.
+  // Refining the top 30 by cap rate guarantees the user's most actionable
+  // picks always show AirDNA-verified numbers, in any market.
+  const candidates = [...stroppState.results]
+    .filter(r => (r.capRate || 0) > 0 && r.confidence !== 'verified')
+    .sort((a, b) => (b.capRate || 0) - (a.capRate || 0))
     .slice(0, 30);
   if (!candidates.length) return;
 
