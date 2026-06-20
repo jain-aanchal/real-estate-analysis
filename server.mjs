@@ -53,7 +53,6 @@ const RENTCAST_API_KEY = process.env.RENTCAST_API_KEY;
 const RENTCAST_BASE = 'https://api.rentcast.io/v1';
 const AIRROI_API_KEY = process.env.AIRROI_API_KEY;
 const AIRROI_BASE = 'https://api.airroi.com';
-const REALTOR16_RAPIDAPI_KEY = process.env.REALTOR16_RAPIDAPI_KEY;
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 const PROPERTYRADAR_API_KEY = process.env.PROPERTYRADAR_API_KEY;
 const PROPERTYRADAR_BASE = 'https://api.propertyradar.com/v1';
@@ -71,7 +70,6 @@ app.get('/api/health', (req, res) => {
     airroi_configured: !!AIRROI_API_KEY,
     google_maps_configured: !!GOOGLE_MAPS_API_KEY,
     propertyradar_configured: !!PROPERTYRADAR_API_KEY,
-    realtor16_configured: !!REALTOR16_RAPIDAPI_KEY,
     redfin_available: true,
     scraper_installed: playwrightInstalled,
     zillow_available: playwrightInstalled,
@@ -825,69 +823,12 @@ app.post('/api/listing/parse', async (req, res) => {
   if (!url) return res.status(400).json({ error: 'url is required' });
   if (!/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'url must start with http(s)://' });
 
-  // Fast path: Realtor.com URLs → Realtor16 API (no Playwright).
-  // Parses much faster (~500ms vs ~5s) and gives richer data (photos, list date).
-  if (/realtor\.com/i.test(url) && REALTOR16_RAPIDAPI_KEY) {
-    try {
-      const propIdMatch = url.match(/_M(\d+)-?(\d+)?/);
-      const propertyId = propIdMatch ? (propIdMatch[1] + (propIdMatch[2] || '')) : null;
-      const rt16Url = propertyId
-        ? `https://realtor16.p.rapidapi.com/property/details?property_id=${propertyId}`
-        : `https://realtor16.p.rapidapi.com/property/details?url=${encodeURIComponent(url)}`;
-      const r = await fetch(rt16Url, {
-        headers: {
-          'x-rapidapi-host': 'realtor16.p.rapidapi.com',
-          'x-rapidapi-key': REALTOR16_RAPIDAPI_KEY,
-          'Accept': 'application/json'
-        }
-      });
-      if (r.ok) {
-        const data = await r.json();
-        const p = data?.data || data?.properties?.[0] || data;
-        if (p) {
-          const loc = p.location?.address || {};
-          const desc = p.description || {};
-          const street = loc.line || '';
-          const city = loc.city || '';
-          const state = loc.state_code || loc.state || '';
-          const zip = loc.postal_code || '';
-          const out = {
-            price: Number(p.list_price || p.price || 0) || 0,
-            address: [street, city, state].filter(Boolean).join(', ') + (zip ? ` ${zip}` : ''),
-            bedrooms: Number(desc.beds || desc.beds_min || 0) || 0,
-            bathrooms: parseFloat(desc.baths_consolidated || desc.baths || 0) || 0,
-            sqft: Number(desc.sqft || desc.living_area || 0) || 0,
-            yearBuilt: Number(desc.year_built || 0) || 0,
-            lotSize: Number(desc.lot_sqft || 0) || 0,
-            hoaMonthly: Number(p.hoa?.fee || desc.hoa_fee || 0) || 0,
-            taxAnnual: Number(p.tax_history?.[0]?.tax || 0) || 0,
-            taxRate: 0,
-            photoUrl: p.primary_photo?.href || (p.photos?.[0]?.href) || '',
-            permalink: p.permalink ? `https://www.realtor.com/realestateandhomes-detail/${p.permalink}` : url,
-            source: 'realtor16',
-            url
-          };
-          if (out.taxAnnual && out.price) {
-            out.taxRate = +((out.taxAnnual / out.price) * 100).toFixed(3);
-          }
-          if (out.price > 0 || out.bedrooms > 0) {
-            console.log('[listing/parse] realtor16 OK:', { price: out.price, br: out.bedrooms, ba: out.bathrooms });
-            return res.json(out);
-          }
-        }
-      }
-      console.warn('[listing/parse] realtor16 returned no data, falling back to Playwright');
-    } catch (e) {
-      console.warn('[listing/parse] realtor16 failed, falling back:', e.message);
-    }
-  }
-
   const playwrightInstalled = existsSync(join(__dirname, 'node_modules', 'playwright'));
   if (!playwrightInstalled) {
     return res.status(501).json({ error: 'Playwright not installed. Run: npm run install-scraper' });
   }
 
-  console.log(`[listing/parse] ${url} (Playwright fallback)`);
+  console.log(`[listing/parse] ${url}`);
   const child = spawn('node', ['listing-scraper.mjs', '--url', url], { cwd: __dirname });
   let stdout = '', stderr = '';
   child.stdout.on('data', c => stdout += c.toString());
@@ -1691,10 +1632,6 @@ import {
 } from './rentcast-opportunity.mjs';
 import { detectMarketType, strDefaults, strAnnualRevenue } from './lib/str-multiplier.mjs';
 import { computeScenarios } from './lib/str-scenarios.mjs';
-import {
-  forSaleByLocation as rt16ForSaleByLocation,
-  forSaleByCoords as rt16ForSaleByCoords
-} from './realtor16-client.mjs';
 
 // Map UI property-type keys (UI uses kebab-case) to RentCast labels.
 const PROPERTY_TYPE_TO_RC = {
@@ -1724,133 +1661,19 @@ function parseSearchLocation(location) {
   return { kind: 'address', raw: trimmed };
 }
 
-// ============================================================================
-// AirROI area baseline — fetches up to ~25 STR comparables for the search area
-// and aggregates them into median revenue + occupancy + ADR per bedroom count.
-// This is the primary STR data source for the Opportunity Finder; we use it
-// before falling back to RentCast LTR × multiplier × occupancy heuristic.
-// ============================================================================
-async function fetchAirroiAreaBaseline({ address, bedrooms = 3, bathrooms = 2, guests }) {
-  if (!AIRROI_API_KEY || !address) return null;
-  const cacheKey = `sopp-airroi-area-${hashKey({ a: address })}`;
-  const cached = cacheGet(cacheKey, 60 * 60); // 1hr cache per search area
-  if (cached) return cached;
-
-  const params = new URLSearchParams({
-    address,
-    bedrooms: parseInt(bedrooms) || 3,
-    baths: (parseFloat(bathrooms) || 2).toFixed(1),
-    guests: parseInt(guests) || bedrooms * 2,
-    currency: 'usd'
-  });
-  const url = `${AIRROI_BASE}/listings/comparables?${params}`;
-  try {
-    const r = await fetch(url, { headers: { 'x-api-key': AIRROI_API_KEY, 'Accept': 'application/json' } });
-    if (!r.ok) {
-      console.warn(`[airroi-area] HTTP ${r.status}`);
-      return null;
-    }
-    const data = await r.json();
-    const rawComps = Array.isArray(data) ? data : (data.data || data.listings || data.comparables || []);
-    if (!rawComps.length) return null;
-
-    // Aggregate into per-BR median revenue + occupancy + ADR
-    const byBr = {};   // { 1: [rev,rev,...], 2: [...], ... }
-    const occByBr = {};
-    const adrByBr = {};
-    const allRevs = [];
-    for (const c of rawComps) {
-      const prop = c.property_details || {};
-      const perf = c.performance_metrics || {};
-      const br = Number(prop.bedrooms || prop.beds) || 0;
-      const rev = Number(perf.ttm_revenue || perf.revenue || perf.annual_revenue) || 0;
-      const occRaw = Number(perf.ttm_occupancy || perf.occupancy_rate || perf.occupancy) || 0;
-      const occ = occRaw > 0 && occRaw <= 1 ? occRaw : occRaw / 100;
-      const adr = Number(perf.ttm_avg_rate || perf.avg_daily_rate || perf.adr) || 0;
-      if (rev <= 0) continue;
-      if (!byBr[br]) { byBr[br] = []; occByBr[br] = []; adrByBr[br] = []; }
-      byBr[br].push(rev);
-      if (occ > 0) occByBr[br].push(occ);
-      if (adr > 0) adrByBr[br].push(adr);
-      allRevs.push(rev);
-    }
-    const median = (arr) => {
-      if (!arr || !arr.length) return 0;
-      const s = [...arr].sort((a, b) => a - b);
-      const m = Math.floor(s.length / 2);
-      return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-    };
-    const revByBr = {};
-    const occByBrMedian = {};
-    const adrByBrMedian = {};
-    for (const br of Object.keys(byBr)) {
-      revByBr[br] = median(byBr[br]);
-      occByBrMedian[br] = median(occByBr[br]);
-      adrByBrMedian[br] = median(adrByBr[br]);
-    }
-    const baseline = {
-      revByBr,
-      occByBr: occByBrMedian,
-      adrByBr: adrByBrMedian,
-      overallMedianRev: median(allRevs),
-      compCount: rawComps.length,
-      source: 'airroi'
-    };
-    cacheSet(cacheKey, baseline);
-    console.log(`[airroi-area] ${rawComps.length} comps cached`, Object.keys(revByBr).map(b => `${b}BR=$${Math.round(revByBr[b]).toLocaleString()}`).join(' '));
-    return baseline;
-  } catch (e) {
-    console.warn('[airroi-area] error:', e.message);
-    return null;
-  }
-}
-
-// Look up the AirROI area median revenue for a specific bedroom count.
-// Falls back to overall median × industry per-BR scaling if exact BR missing.
-const BEDROOM_REV_FACTORS = { 0: 0.60, 1: 0.75, 2: 1.00, 3: 1.25, 4: 1.50, 5: 1.75, 6: 2.00, 7: 2.25 };
-function airroiBaselineForBr(baseline, br) {
-  if (!baseline) return null;
-  const exact = baseline.revByBr[br];
-  if (exact > 0) {
-    return {
-      revenue: exact,
-      occupancy: baseline.occByBr[br] || 0.55,
-      adr: baseline.adrByBr[br] || 0
-    };
-  }
-  // Fall back to scaling from overall median
-  if (baseline.overallMedianRev > 0) {
-    const f = BEDROOM_REV_FACTORS[Math.min(7, Math.max(0, Math.round(br)))] || 1;
-    return {
-      revenue: baseline.overallMedianRev * f / (BEDROOM_REV_FACTORS[2] || 1),  // normalize to 2BR baseline
-      occupancy: 0.55,
-      adr: 0
-    };
-  }
-  return null;
-}
-
 // Filter a single RentCast listing against the user-supplied filters block.
 // Returns true if it should be kept.
-//
-// Unconditional exclusions (cannot be overridden by user filters):
-//   - Land / vacant lots — no structure to STR
-//   - Listings with zero bedrooms (likely land, mobile lots, or bad data)
 function passesFilters(L, f) {
-  // ---- Always exclude land / vacant lots ----
-  const rcType = (L.propertyType || '').toLowerCase();
-  if (/\bland\b|\bvacant\b|\blot\b|\bacreage\b|\bagricult/i.test(rcType)) return false;
-  const br = Number(L.bedrooms) || 0;
-  if (br <= 0) return false;  // STR needs at least one bedroom
-
   if (!f) return true;
   if (f.types && f.types.length) {
+    const rcType = (L.propertyType || '').toLowerCase();
     const ok = f.types.some(t => rcType.includes(t.replace('-', ' ')) || rcType.includes(t));
     if (!ok) return false;
   }
   const price = Number(L.price || L.listPrice) || 0;
   if (f.priceMin && price < f.priceMin) return false;
   if (f.priceMax && price > f.priceMax) return false;
+  const br = Number(L.bedrooms) || 0;
   if (f.brMin != null && br < f.brMin) return false;
   if (f.brMax != null && br > f.brMax) return false;
   const ba = Number(L.bathrooms) || 0;
@@ -1868,9 +1691,7 @@ app.get('/api/str-opportunity/search', async (req, res) => {
   if (!RENTCAST_API_KEY) return res.status(501).json({ error: 'RENTCAST_API_KEY not configured' });
 
   const cap = Math.min(parseInt(req.query.cap) || 500, 1000);
-  // NOTE: use isFinite to allow 0 as a valid target (`|| 0.11` treats 0 as falsy)
-  const rawTargetCap = parseFloat(req.query.targetCap);
-  const targetCap = Math.max(0, Math.min(1, isFinite(rawTargetCap) ? rawTargetCap : 0.11));
+  const targetCap = Math.max(0, Math.min(1, parseFloat(req.query.targetCap) || 0.11));
   const radius = parseInt(req.query.radius) || 25;
   let filters = {};
   try { filters = JSON.parse(req.query.filters || '{}'); } catch { /* ignore */ }
@@ -1910,73 +1731,9 @@ app.get('/api/str-opportunity/search', async (req, res) => {
     }
 
     // Step 2: Pull active listings
-    // Primary source: Realtor16 (Realtor.com via RapidAPI). Better coverage
-    // and richer fields (photos, listing date, lot size) than RentCast.
-    // Fallback: RentCast (always wired) if Realtor16 fails or isn't configured.
     const cityHint = loc.city || (loc.kind === 'zip' ? null : location.split(',')[0]);
     const stateHint = loc.state;
-    let listings = [];
-    let listingsSource = 'rentcast';
-    let totalAvailable = 0;
-    if (REALTOR16_RAPIDAPI_KEY) {
-      try {
-        let rt16Result;
-        if (loc.kind === 'address' && listingArgs.lat) {
-          rt16Result = await rt16ForSaleByCoords(
-            { lat: listingArgs.lat, lng: listingArgs.lng, radius, limit: cap },
-            REALTOR16_RAPIDAPI_KEY
-          );
-        } else {
-          rt16Result = await rt16ForSaleByLocation(
-            { location, limit: cap, searchRadius: loc.kind === 'address' ? radius : 0 },
-            REALTOR16_RAPIDAPI_KEY
-          );
-        }
-        if (rt16Result?.listings?.length) {
-          listings = rt16Result.listings;
-          totalAvailable = rt16Result.total || listings.length;
-          listingsSource = 'realtor16';
-          console.log(`[str-opp/search] Realtor16 returned ${listings.length} listings (${totalAvailable} total in market)`);
-        }
-      } catch (e) {
-        console.warn('[str-opp/search] Realtor16 failed, falling back to RentCast:', e.message);
-      }
-    }
-    if (!listings.length) {
-      listings = await rcListingsSale(listingArgs, RENTCAST_API_KEY);
-      listingsSource = 'rentcast';
-    }
-
-    // Deduplicate by normalized address — Realtor.com sometimes returns the
-    // same property under multiple listing IDs (relisted, multiple agents).
-    // Keep the listing with the lowest price (most aggressive seller) when
-    // there's a tie, otherwise the first one seen.
-    {
-      const seen = new Map();
-      const norm = (s) => String(s || '')
-        .toLowerCase()
-        .replace(/[^\w\s]/g, '')      // strip punctuation
-        .replace(/\s+/g, ' ')          // collapse whitespace
-        .replace(/\b(unit|apt|apartment|suite|ste|#)\s*([\w-]+)/gi, '#$2')
-        .trim();
-      for (const L of listings) {
-        const key = norm(L.formattedAddress || L.address);
-        if (!key) continue;
-        const existing = seen.get(key);
-        const price = Number(L.price || L.listPrice) || 0;
-        if (!existing) {
-          seen.set(key, L);
-        } else {
-          const exPrice = Number(existing.price || existing.listPrice) || 0;
-          if (price > 0 && (exPrice === 0 || price < exPrice)) seen.set(key, L);
-        }
-      }
-      const beforeDedup = listings.length;
-      listings = [...seen.values()];
-      if (listings.length < beforeDedup) {
-        console.log(`[str-opp/search] deduplicated ${beforeDedup} → ${listings.length} listings`);
-      }
-    }
+    const listings = await rcListingsSale(listingArgs, RENTCAST_API_KEY);
 
     // Step 2b: Look up market rent. Prefer zip-level (more reliable) — derive
     // the dominant zip from the listings if we don't have one from the query.
@@ -2005,22 +1762,8 @@ app.get('/api/str-opportunity/search', async (req, res) => {
       occupancy: overrideOcc
     });
 
-    // Step 3b: AirROI area baseline — primary STR data source.
-    // Single call returns ~25 actual STR comparables; we group by BR and use
-    // median revenue as the baseline for every RentCast listing.
-    const sampleAddress = listings[0]?.formattedAddress || listings[0]?.address || location;
-    const sampleBr = Number(listings[0]?.bedrooms) || 3;
-    const sampleBa = Number(listings[0]?.bathrooms) || 2;
-    const airroiBaseline = await fetchAirroiAreaBaseline({
-      address: sampleAddress,
-      bedrooms: sampleBr,
-      bathrooms: sampleBa,
-      guests: sampleBr * 2
-    });
-
     // Step 4: For each listing, compute UW
     const candidates = [];
-    let airroiCount = 0, heuristicCount = 0;
     for (const L of listings) {
       if (!passesFilters(L, filters)) continue;
       const price = Number(L.price || L.listPrice) || 0;
@@ -2029,23 +1772,7 @@ app.get('/api/str-opportunity/search', async (req, res) => {
       const bathrooms = Number(L.bathrooms) || 1;
       const ltrMonthly = rentForBedrooms(market, bedrooms);
       if (ltrMonthly <= 0) continue;
-
-      // Primary: AirROI-derived baseline by BR count.
-      // Fallback: RentCast LTR × multiplier × occupancy heuristic.
-      let strAnnual, strOcc, strConfidence;
-      const air = airroiBaselineForBr(airroiBaseline, bedrooms);
-      if (air && air.revenue > 0) {
-        strAnnual = air.revenue;
-        strOcc = air.occupancy;
-        strConfidence = 'airroi-baseline';
-        airroiCount++;
-      } else {
-        strAnnual = strAnnualRevenue(ltrMonthly, strOpts);
-        strOcc = strOpts.occupancy;
-        strConfidence = 'estimated';
-        heuristicCount++;
-      }
-
+      const strAnnual = strAnnualRevenue(ltrMonthly, strOpts);
       const uw = computeUnderwriting({
         price,
         units: 1,
@@ -2068,14 +1795,6 @@ app.get('/api/str-opportunity/search', async (req, res) => {
         daysOnMarket: Number(L.daysOnMarket) || 0,
         ltrMonthlyRent: ltrMonthly,
         strAnnualRevenue: Math.round(strAnnual),
-        occupancy: strOcc,              // 0-1 decimal; from AirROI or auto-detected
-        confidence: strConfidence,      // 'airroi-baseline' | 'estimated'  (refinement → 'verified')
-        // Realtor16 extras (when source is realtor16)
-        photoUrl: L.photoUrl || '',
-        permalink: L.permalink || '',
-        listDate: L.listDate || '',
-        priceReduced: Number(L.priceReduced) || 0,
-        listingStatus: L.status || '',
         capRate: uw.capRate,
         noi: Math.round(uw.noi),
         monthlyCF: Math.round(uw.monthlyCF),
@@ -2084,6 +1803,7 @@ app.get('/api/str-opportunity/search', async (req, res) => {
         dscr: uw.dscr,
         targetPriceAtCap: Math.round(uw.targetPriceAtCap),
         roi: uw.roi,
+        confidence: 'estimated',
         underwriting: {
           assumptions: uw.assumptions,
           monthlyPI: Math.round(uw.monthlyPI),
@@ -2105,16 +1825,7 @@ app.get('/api/str-opportunity/search', async (req, res) => {
       autoMultiplier: strOpts.multiplier,
       autoOccupancy: strOpts.occupancy,
       ltrMedianRent: market?.medianRent || 0,
-      airroiBaseline: airroiBaseline ? {
-        compCount: airroiBaseline.compCount,
-        revByBr: airroiBaseline.revByBr,
-        occByBr: airroiBaseline.occByBr,
-        used: airroiCount,
-        fellBack: heuristicCount
-      } : null,
-      source: `${listingsSource}${airroiBaseline ? '+airroi' : ''}`,
-      listingsSource,
-      totalAvailable,
+      source: 'rentcast',
       tookMs: Date.now() - t0
     };
     cacheSet(cacheKey, payload);

@@ -44,32 +44,6 @@ The tab auto-detects market type from the city name (e.g. Lahaina → vacation �
 | `POST /api/str-opportunity/property` | Full Insights payload: RentCast property record, nearby sold comps, Low/Mid/High scenarios |
 | `POST /api/str-opportunity/refine` | Calls AirROI/AirDNA Rentalizer for up to 30 addresses (24hr per-address cache) |
 
-## 🧭 Data Source Map (canonical)
-
-Every tab uses the same source for the same use case. When extending the tool, follow this map:
-
-| Data type | Primary | Fallback | Used by |
-|---|---|---|---|
-| **Active for-sale listings** | Realtor16 (Realtor.com via RapidAPI) | RentCast `/listings/sale` | STR Opportunity Finder search |
-| **Single-listing URL parse** | Realtor16 (for `realtor.com` URLs) | Playwright scraper (Redfin / Zillow / generic) | STR + LTR tabs "Pull from Listing" |
-| **LTR rent estimates** | RentCast `/avm/rent/long-term` + `/markets` | — | LTR tab + STR Opp Finder (rent baseline) |
-| **STR revenue estimates** | AirROI `/listings/comparables` + `/calculator/estimate` | RentCast LTR × multiplier × occupancy heuristic | STR tab + STR Opp Finder |
-| **Property records** (owner, tax, last sale) | RentCast `/properties` | Redfin scrape (sales history) | LTR tab, Distressed tab, STR Opp Finder drawer |
-| **Distressed inventory** (NOD / auction / tax-delinquent) | PropertyRadar (paid, off by default) | Auction.com scrape | Distressed tab |
-| **Sales history** | Redfin `belowTheFold` (via Playwright) | Zillow `__NEXT_DATA__` | LTR tab, Distressed tab |
-| **Property tax rates** | Tax Foundation 2026 table (`STATE_TAX_RATES`) | — | STR + LTR + STR Opp Finder underwriting |
-| **Map tiles** | Google Maps JS API | Leaflet + OpenStreetMap | Distressed tab |
-| **Address autocomplete** | Nominatim (OpenStreetMap) | — | All four tabs |
-
-### When to use what
-
-- **"Find me listings in X"** → Realtor16 (best coverage, photos, price-cut tracking)
-- **"What's the long-term rent here?"** → RentCast
-- **"What's the STR revenue here?"** → AirROI (area baseline → per-property Rentalizer for top picks)
-- **"What's the owner / last sale / tax assessment?"** → RentCast
-- **"Is this property in distress?"** → PropertyRadar if configured, else Auction.com scrape
-- **"What did this property sell for over the years?"** → Redfin (most complete history)
-
 ## Features
 
 - **Live calculations** — edit any input and all metrics update instantly
