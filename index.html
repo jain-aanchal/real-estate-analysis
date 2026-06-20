@@ -1043,9 +1043,10 @@
     text-align: center;
     font-size: 12px;
   }
-  .stropp-conf-estimated { color: var(--muted); }
-  .stropp-conf-refining  { color: var(--yellow); }
-  .stropp-conf-verified  { color: var(--green); }
+  .stropp-conf-estimated         { color: var(--muted); }
+  .stropp-conf-airroi-baseline   { color: #93c5fd; }    /* blue — AirROI area median */
+  .stropp-conf-refining          { color: var(--yellow); }
+  .stropp-conf-verified          { color: var(--green); }
   .stropp-search-status {
     font-size: 12px;
     color: var(--muted);
@@ -1885,8 +1886,12 @@
 
     <div class="stropp-targetcap-row">
       <label>Target cap rate:</label>
-      <input type="range" id="so_targetCap" min="6" max="20" step="0.5" value="11" oninput="onTargetCapChange()" />
+      <input type="range" id="so_targetCap" min="0" max="20" step="0.5" value="11" oninput="onTargetCapChange()" />
       <span class="cap-value" id="so_targetCapDisplay">11.0%</span>
+      <label style="margin-left:24px;">Min DSCR:</label>
+      <input type="number" id="so_minDscr" step="0.05" min="0" max="5" placeholder="any" style="width:90px;" oninput="renderStroppResults()" />
+      <label style="margin-left:18px;">Min Occupancy %:</label>
+      <input type="number" id="so_minOcc" step="1" min="0" max="100" placeholder="any" style="width:90px;" oninput="renderStroppResults()" />
     </div>
 
     <div class="filter-row">
@@ -4992,7 +4997,7 @@ function resetStroppFilters() {
     el.checked = (i < 3); // first 3 (SFR/Condo/Townhome) on by default
   });
   ['so_brMin','so_brMax','so_baMin','so_priceMin','so_priceMax','so_yearBefore',
-   'so_multiplier','so_occupancy'].forEach(id => $(id) && ($(id).value = ''));
+   'so_multiplier','so_occupancy','so_minDscr','so_minOcc'].forEach(id => $(id) && ($(id).value = ''));
   $('so_radius').value = '25';
   $('so_targetCap').value = 11;
   $('so_targetCapDisplay').textContent = '11.0%';
@@ -5026,9 +5031,16 @@ function renderStroppResults() {
   const tbody = $('so_resultsBody');
   if (!tbody) return;
   const targetCap = parseFloat($('so_targetCap').value) / 100;
+  const minDscr = numOrNull('so_minDscr');
+  const minOcc = numOrNull('so_minOcc');
 
-  // Filter to meet target cap + sort by current field/direction
+  // Filter: target cap + min DSCR + min Occupancy, then sort
   let list = stroppState.results.filter(r => (r.capRate || 0) >= targetCap);
+  if (minDscr != null) list = list.filter(r => (r.dscr || 0) >= minDscr);
+  if (minOcc != null) {
+    const occThresh = minOcc / 100;  // input is %, stored as decimal
+    list = list.filter(r => (r.occupancy || 0) >= occThresh);
+  }
   const f = stroppState.sortField, d = stroppState.sortDir === 'asc' ? 1 : -1;
   list = [...list].sort((a, b) => {
     const av = a[f] ?? 0, bv = b[f] ?? 0;
@@ -5036,24 +5048,70 @@ function renderStroppResults() {
     return (av - bv) * d;
   });
 
+  const dscrText = minDscr != null ? ` & DSCR ≥ ${minDscr.toFixed(2)}` : '';
+  const occText = minOcc != null ? ` & Occ ≥ ${minOcc}%` : '';
   $('so_resultCount').textContent =
-    `${list.length} properties meet target cap (of ${stroppState.results.length} candidates)`;
+    `${list.length} properties meet target cap${dscrText}${occText} (of ${stroppState.results.length} candidates)`;
   $('so_exportBtn').disabled = list.length === 0;
 
-  if (!list.length) { tbody.innerHTML = ''; return; }
+  if (!list.length) {
+    // Hint at which filter is excluding everything so the user can adjust
+    let hint = '';
+    if (stroppState.results.length > 0) {
+      const totalBeforeFilters = stroppState.results.length;
+      if (minOcc != null) {
+        const occThresh = minOcc / 100;
+        const occGap = stroppState.results.filter(r => (r.occupancy || 0) < occThresh).length;
+        if (occGap === totalBeforeFilters) hint = `Try lowering <b>Min Occupancy</b> (currently ${minOcc}%) — all ${totalBeforeFilters} candidates are below it.`;
+      }
+      if (!hint && minDscr != null) {
+        const dscrGap = stroppState.results.filter(r => (r.dscr || 0) < minDscr).length;
+        if (dscrGap === totalBeforeFilters) hint = `Try lowering <b>Min DSCR</b> (currently ${minDscr}) — all ${totalBeforeFilters} candidates are below it.`;
+      }
+      if (!hint && targetCap > 0) {
+        const capGap = stroppState.results.filter(r => (r.capRate || 0) < targetCap).length;
+        if (capGap === totalBeforeFilters) {
+          const bestCap = Math.max(...stroppState.results.map(r => r.capRate || 0)) * 100;
+          hint = `Try lowering <b>Target cap rate</b> (currently ${(targetCap*100).toFixed(1)}%) — best in this set is ${bestCap.toFixed(1)}%.`;
+        }
+      }
+      if (!hint) hint = `No candidates match all filters together.`;
+    } else {
+      hint = `No candidates returned from search.`;
+    }
+    tbody.innerHTML = `<tr><td colspan="14" style="padding:24px; text-align:center; color:var(--muted); font-size:13px;">${hint}</td></tr>`;
+    return;
+  }
 
   tbody.innerHTML = list.slice(0, 1000).map((r, i) => {
-    const confIcon = { verified: '🟢', refining: '⏳', estimated: '⚪' }[r.confidence] || '⚪';
+    const confIcon = {
+      verified: '🟢',          // AirROI per-property Rentalizer verified
+      refining: '⏳',
+      'airroi-baseline': '🔵', // AirROI area median for this BR count
+      estimated: '⚪'           // RentCast LTR × heuristic (fallback only)
+    }[r.confidence] || '⚪';
     const confClass = `stropp-conf-${r.confidence}`;
     const cfClass = (r.monthlyCF || 0) > 0 ? 'stropp-cf-good' : 'stropp-cf-bad';
     const dscrClass = (r.dscr || 0) >= 1.25 ? 'stropp-cap-good'
                     : (r.dscr || 0) >= 1.0  ? 'stropp-cap-warn'
                     : 'stropp-cap-bad';
+    // Price-cut badge — Realtor16 exposes a 'priceReduced' delta
+    const cutBadge = (r.priceReduced && r.priceReduced > 0)
+      ? `<span title="Price reduced by $${r.priceReduced.toLocaleString()}" style="display:inline-block; background:rgba(239,68,68,0.15); color:#fca5a5; border-radius:8px; padding:1px 6px; font-size:10px; font-weight:600; margin-left:4px;">↓ $${Math.round(r.priceReduced/1000)}K</span>`
+      : '';
+    // "Just listed" badge — listed in last 7 days (Realtor16's listDate)
+    let newBadge = '';
+    if (r.listDate) {
+      const daysAgo = Math.floor((Date.now() - new Date(r.listDate).getTime()) / (1000 * 60 * 60 * 24));
+      if (daysAgo >= 0 && daysAgo <= 7) {
+        newBadge = `<span title="Listed ${daysAgo} day${daysAgo === 1 ? '' : 's'} ago" style="display:inline-block; background:rgba(16,185,129,0.18); color:#6ee7b7; border-radius:8px; padding:1px 6px; font-size:10px; font-weight:600; margin-left:4px;">NEW</span>`;
+      }
+    }
     return `<tr data-so-id="${r.id}" onclick="openStroppDrawer('${r.id}')">
       <td><input type="checkbox" /></td>
       <td>${i + 1}</td>
       <td><span class="stropp-conf ${confClass}">${confIcon}</span></td>
-      <td>${(r.address || '').slice(0, 50)}</td>
+      <td>${(r.address || '').slice(0, 50)}${newBadge}${cutBadge}</td>
       <td>${r.propertyType || '—'}</td>
       <td>${r.bedrooms || '?'}/${r.bathrooms || '?'}</td>
       <td class="right">${r.sqft ? r.sqft.toLocaleString() : '—'}</td>
@@ -5081,7 +5139,17 @@ async function openStroppDrawer(id) {
   _soActiveProperty = r;
 
   // Open drawer immediately with what we have, then fetch detail in background
-  $('soDrawerTitle').textContent = r.address || 'Property';
+  let title = r.address || 'Property';
+  // Inject photo thumbnail + Realtor.com link when we have them
+  if (r.photoUrl) {
+    title = `<div style="display:flex; gap:10px; align-items:center;">
+      <img src="${r.photoUrl}" style="width:64px; height:48px; object-fit:cover; border-radius:6px; border:1px solid var(--border);" alt="" />
+      <div style="font-size:13px;">${r.address || 'Property'}${r.permalink ? `<br><a href="${r.permalink}" target="_blank" rel="noopener" style="font-size:11px; color:#93c5fd;">View on Realtor.com ↗</a>` : ''}</div>
+    </div>`;
+  } else if (r.permalink) {
+    title = `${r.address || 'Property'} <a href="${r.permalink}" target="_blank" rel="noopener" style="font-size:11px; color:#93c5fd; margin-left:6px;">↗</a>`;
+  }
+  $('soDrawerTitle').innerHTML = title;
   $('stroppDrawer').classList.add('open');
   renderStroppUwCard(r);
 
@@ -5224,7 +5292,25 @@ function renderStroppRecordTab(record, full) {
   const owner = record?.owner || {};
   const tax = record?.tax || {};
   const lastSale = record?.lastSale || {};
+
+  // External links for the selected property
+  const addr = _soActiveProperty?.address || full?.address || '';
+  const addrEnc = encodeURIComponent(addr);
+  const redfinUrl  = `https://www.redfin.com/homes?location=${addrEnc}`;
+  const zillowUrl  = `https://www.zillow.com/homes/${addrEnc}_rb/`;
+  const realtorUrl = `https://www.realtor.com/realestateandhomes-search?qdomain=${addrEnc}`;
+  const mapsUrl    = `https://www.google.com/maps/search/?api=1&query=${addrEnc}`;
+
   pane.innerHTML = `
+    <div class="so-section">
+      <h4>Links</h4>
+      <div class="row" style="gap:6px; flex-wrap:wrap; justify-content:flex-start;">
+        <a href="${redfinUrl}" target="_blank" rel="noopener" class="link-pill">🔴 Redfin</a>
+        <a href="${zillowUrl}" target="_blank" rel="noopener" class="link-pill">🏠 Zillow</a>
+        <a href="${realtorUrl}" target="_blank" rel="noopener" class="link-pill">📋 Realtor.com</a>
+        <a href="${mapsUrl}" target="_blank" rel="noopener" class="link-pill">🗺️ Google Maps</a>
+      </div>
+    </div>
     <div class="so-section">
       <h4>Owner</h4>
       <div class="row"><span class="lbl">Name</span><span>${owner.name || '—'}</span></div>
@@ -5344,7 +5430,10 @@ function exportStroppSinglePdf() {
 function buildStroppQuery() {
   const params = new URLSearchParams();
   params.set('location', $('so_location').value.trim());
-  params.set('targetCap', (parseFloat($('so_targetCap').value) / 100).toString());
+  // Always send 0 to the server. The slider is a CLIENT-SIDE filter only —
+  // sending the slider value to the server would limit what gets returned and
+  // would break the "drag slider to see lower caps" UX.
+  params.set('targetCap', '0');
   params.set('cap', $('so_resultCap').value);
   params.set('radius', $('so_radius').value);
   const mul = $('so_multiplier').value;
@@ -5384,7 +5473,11 @@ async function stroppSearch() {
       ed.textContent = `Market: ${d.marketType} ${d.marketEmoji || ''} · multiplier ${d.autoMultiplier}× · occ ${Math.round((d.autoOccupancy || 0) * 100)}%`;
     }
 
-    status.textContent = `✓ ${stroppState.results.length} candidates · scanned ${d.totalScanned} · ${d.tookMs}ms${d.cached ? ' (cached)' : ''}`;
+    // Build status with source breakdown so it's obvious which APIs are providing data
+    const listingsTag = d.listingsSource === 'realtor16' ? '🏠 Realtor.com' : '📋 RentCast';
+    const strTag = d.airroiBaseline ? '🔵 AirROI' : '⚪ Heuristic';
+    const totalMarket = d.totalAvailable ? ` of ${d.totalAvailable.toLocaleString()} active` : '';
+    status.textContent = `✓ ${stroppState.results.length} candidates${totalMarket} · listings: ${listingsTag} · STR: ${strTag} · ${d.tookMs}ms${d.cached ? ' (cached)' : ''}`;
     status.style.color = 'var(--green)';
 
     renderStroppResults();
@@ -5402,9 +5495,16 @@ async function stroppSearch() {
 // Hard cap 30 per search; respect AirDNA rate limits with batches of 5.
 // =====================================================
 async function refineTopPicks() {
-  const targetCap = parseFloat($('so_targetCap').value) / 100;
-  const candidates = stroppState.results
-    .filter(r => (r.capRate || 0) >= Math.max(targetCap, 0.12))
+  // Refine the top 30 properties by cap rate, regardless of absolute level.
+  // Reason: AirROI's AREA-MEDIAN baseline (used for unrefined rows) can be
+  // significantly off for individual properties — high in markets with
+  // luxury comp distortion (Yosemite cabins, Lahaina ocean-view condos),
+  // low in markets where this specific property is above the median.
+  // Refining the top 30 by cap rate guarantees the user's most actionable
+  // picks always show AirDNA-verified numbers, in any market.
+  const candidates = [...stroppState.results]
+    .filter(r => (r.capRate || 0) > 0 && r.confidence !== 'verified')
+    .sort((a, b) => (b.capRate || 0) - (a.capRate || 0))
     .slice(0, 30);
   if (!candidates.length) return;
 
@@ -5432,13 +5532,14 @@ async function refineTopPicks() {
         if (ai?.revenue && ai.revenue > 0) {
           c.strAnnualRevenue = ai.revenue;
           c.confidence = 'verified';
+          if (ai.occupancy != null) c.occupancy = ai.occupancy;  // AirDNA-verified per-property occupancy
           // Quick UW refresh: use the new revenue
           const newRent = ai.revenue / 12;
           c.ltrMonthlyRent = newRent;  // not strictly LTR, but used by drawer slider
           // Recompute cap rate / NOI based on new revenue (lightweight)
           const opexPct = 0.30;  // 30% of revenue as rough OpEx assumption
           c.noi = Math.round(ai.revenue * (1 - opexPct) - c.price * 0.011);
-          c.capRate = c.noi / c.price;
+          c.capRate = Math.max(0, c.noi / c.price);  // clamp at 0 so filter at 0% includes them
         } else {
           c.confidence = 'estimated';  // refinement failed/no data
         }
@@ -5554,6 +5655,8 @@ function readCurrentStroppFilters() {
     location: $('so_location').value.trim(),
     radius: $('so_radius').value,
     targetCap: $('so_targetCap').value,
+    minDscr: $('so_minDscr').value,
+    minOcc: $('so_minOcc').value,
     multiplier: $('so_multiplier').value,
     occupancy: $('so_occupancy').value,
     resultCap: $('so_resultCap').value,
@@ -5566,6 +5669,8 @@ function applyStroppFilters(saved) {
   if (saved.location)   $('so_location').value = saved.location;
   if (saved.radius)     $('so_radius').value = saved.radius;
   if (saved.targetCap)  { $('so_targetCap').value = saved.targetCap; onTargetCapChange(); }
+  if (saved.minDscr != null) $('so_minDscr').value = saved.minDscr;
+  if (saved.minOcc != null) $('so_minOcc').value = saved.minOcc;
   if (saved.multiplier) $('so_multiplier').value = saved.multiplier;
   if (saved.occupancy)  $('so_occupancy').value = saved.occupancy;
   if (saved.resultCap)  $('so_resultCap').value = saved.resultCap;
@@ -5645,7 +5750,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function exportStroppCsv() {
   const targetCap = parseFloat($('so_targetCap').value) / 100;
-  const list = stroppState.results.filter(r => (r.capRate || 0) >= targetCap);
+  const minDscr = numOrNull('so_minDscr');
+  const minOcc = numOrNull('so_minOcc');
+  let list = stroppState.results.filter(r => (r.capRate || 0) >= targetCap);
+  if (minDscr != null) list = list.filter(r => (r.dscr || 0) >= minDscr);
+  if (minOcc != null) list = list.filter(r => (r.occupancy || 0) >= minOcc / 100);
   if (!list.length) return;
   const cols = ['address','propertyType','bedrooms','bathrooms','sqft','yearBuilt',
                 'price','ltrMonthlyRent','strAnnualRevenue','capRate','monthlyCF','dscr','cocReturn'];
