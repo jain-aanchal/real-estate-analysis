@@ -4992,8 +4992,11 @@ const stroppState = {
 function readStroppFilters() {
   const types = [...document.querySelectorAll('#tab-stropp [data-so-filter="type"]:checked')]
     .map(el => el.value);
+  const views = [...document.querySelectorAll('#tab-stropp [data-so-view]:checked')]
+    .map(el => el.dataset.soView);
   return {
     types,
+    views,  // → Realty-in-US uses these for native server-side keyword filtering
     brMin: numOrNull('so_brMin'),
     brMax: numOrNull('so_brMax'),
     baMin: numOrNull('so_baMin'),
@@ -5550,7 +5553,10 @@ async function stroppSearch() {
     }
 
     // Build status with source breakdown so it's obvious which APIs are providing data
-    const listingsTag = d.listingsSource === 'realtor16' ? '🏠 Realtor.com' : '📋 RentCast';
+    const listingsTag =
+      d.listingsSource === 'realtor16'    ? '🏠 Realtor16'     :
+      d.listingsSource === 'realty-in-us' ? '🏘️ Realty-in-US' :
+      '📋 RentCast';
     const strTag = d.airroiBaseline ? '🔵 AirROI' : '⚪ Heuristic';
     const totalMarket = d.totalAvailable ? ` of ${d.totalAvailable.toLocaleString()} active` : '';
     status.textContent = `✓ ${stroppState.results.length} candidates${totalMarket} · listings: ${listingsTag} · STR: ${strTag} · ${d.tookMs}ms${d.cached ? ' (cached)' : ''}`;
