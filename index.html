@@ -5298,7 +5298,10 @@ function renderStroppRecordTab(record, full) {
   const addrEnc = encodeURIComponent(addr);
   const redfinUrl  = `https://www.redfin.com/homes?location=${addrEnc}`;
   const zillowUrl  = `https://www.zillow.com/homes/${addrEnc}_rb/`;
-  const realtorUrl = `https://www.realtor.com/realestateandhomes-search?qdomain=${addrEnc}`;
+  // Prefer the actual Realtor.com permalink (we have it from Realtor16);
+  // fall back to a search-by-address URL only when there's no permalink.
+  const realtorUrl = _soActiveProperty?.permalink
+    || `https://www.realtor.com/realestateandhomes-detail/${addr.replace(/[,]/g, '').replace(/\s+/g, '-')}`;
   const mapsUrl    = `https://www.google.com/maps/search/?api=1&query=${addrEnc}`;
 
   pane.innerHTML = `
@@ -5392,21 +5395,29 @@ async function manualAirDNARefine() {
     });
     const d = await resp.json();
     const ai = d?.[r.address];
-    if (ai?.revenue) {
+    if (ai?.revenue && ai.revenue > 0) {
+      // Apply the same update logic as refineTopPicks so drawer + table stay
+      // in sync. Without this, the drawer card would update but the row in
+      // the results table behind it would still show stale values.
       r.strAnnualRevenue = ai.revenue;
       r.confidence = 'verified';
-      // Re-run client-side UW recompute with the new revenue
-      const ltrEquiv = ai.revenue / 12;
-      r.ltrMonthlyRent = ltrEquiv;  // hack: lets recomputeStroppUw work
-      $('soa_mul').value = 1.0;     // because we're now using actual STR
-      $('soa_occ').value = 100;
-      recomputeStroppUw();
-      btn.textContent = '✓ AirDNA Verified';
+      if (ai.occupancy != null) r.occupancy = ai.occupancy;
+      r.ltrMonthlyRent = ai.revenue / 12;
+      const opexPct = 0.30;
+      r.noi = Math.round(ai.revenue * (1 - opexPct) - r.price * 0.011);
+      r.capRate = Math.max(0, r.noi / r.price);
+      // Recompute drawer underwriting card with AirDNA values
+      renderStroppUwCard(r);
+      // Update the table row behind the drawer
+      renderStroppResults();
+      btn.textContent = `✓ AirDNA Verified ($${Math.round(ai.revenue).toLocaleString()})`;
     } else {
       btn.textContent = '⚠ AirDNA returned no data';
+      btn.disabled = false;
     }
   } catch (e) {
     btn.textContent = '❌ ' + e.message;
+    btn.disabled = false;
   }
 }
 
