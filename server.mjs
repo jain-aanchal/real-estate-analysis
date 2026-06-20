@@ -53,6 +53,7 @@ const RENTCAST_API_KEY = process.env.RENTCAST_API_KEY;
 const RENTCAST_BASE = 'https://api.rentcast.io/v1';
 const AIRROI_API_KEY = process.env.AIRROI_API_KEY;
 const AIRROI_BASE = 'https://api.airroi.com';
+const REALTOR16_RAPIDAPI_KEY = process.env.REALTOR16_RAPIDAPI_KEY;
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 const PROPERTYRADAR_API_KEY = process.env.PROPERTYRADAR_API_KEY;
 const PROPERTYRADAR_BASE = 'https://api.propertyradar.com/v1';
@@ -70,6 +71,7 @@ app.get('/api/health', (req, res) => {
     airroi_configured: !!AIRROI_API_KEY,
     google_maps_configured: !!GOOGLE_MAPS_API_KEY,
     propertyradar_configured: !!PROPERTYRADAR_API_KEY,
+    realtor16_configured: !!REALTOR16_RAPIDAPI_KEY,
     redfin_available: true,
     scraper_installed: playwrightInstalled,
     zillow_available: playwrightInstalled,
@@ -1632,6 +1634,10 @@ import {
 } from './rentcast-opportunity.mjs';
 import { detectMarketType, strDefaults, strAnnualRevenue } from './lib/str-multiplier.mjs';
 import { computeScenarios } from './lib/str-scenarios.mjs';
+import {
+  forSaleByLocation as rt16ForSaleByLocation,
+  forSaleByCoords as rt16ForSaleByCoords
+} from './realtor16-client.mjs';
 
 // Map UI property-type keys (UI uses kebab-case) to RentCast labels.
 const PROPERTY_TYPE_TO_RC = {
@@ -1847,9 +1853,42 @@ app.get('/api/str-opportunity/search', async (req, res) => {
     }
 
     // Step 2: Pull active listings
+    // Primary source: Realtor16 (Realtor.com via RapidAPI). Better coverage
+    // and richer fields (photos, listing date, lot size) than RentCast.
+    // Fallback: RentCast (always wired) if Realtor16 fails or isn't configured.
     const cityHint = loc.city || (loc.kind === 'zip' ? null : location.split(',')[0]);
     const stateHint = loc.state;
-    const listings = await rcListingsSale(listingArgs, RENTCAST_API_KEY);
+    let listings = [];
+    let listingsSource = 'rentcast';
+    let totalAvailable = 0;
+    if (REALTOR16_RAPIDAPI_KEY) {
+      try {
+        let rt16Result;
+        if (loc.kind === 'address' && listingArgs.lat) {
+          rt16Result = await rt16ForSaleByCoords(
+            { lat: listingArgs.lat, lng: listingArgs.lng, radius, limit: cap },
+            REALTOR16_RAPIDAPI_KEY
+          );
+        } else {
+          rt16Result = await rt16ForSaleByLocation(
+            { location, limit: cap, searchRadius: loc.kind === 'address' ? radius : 0 },
+            REALTOR16_RAPIDAPI_KEY
+          );
+        }
+        if (rt16Result?.listings?.length) {
+          listings = rt16Result.listings;
+          totalAvailable = rt16Result.total || listings.length;
+          listingsSource = 'realtor16';
+          console.log(`[str-opp/search] Realtor16 returned ${listings.length} listings (${totalAvailable} total in market)`);
+        }
+      } catch (e) {
+        console.warn('[str-opp/search] Realtor16 failed, falling back to RentCast:', e.message);
+      }
+    }
+    if (!listings.length) {
+      listings = await rcListingsSale(listingArgs, RENTCAST_API_KEY);
+      listingsSource = 'rentcast';
+    }
 
     // Step 2b: Look up market rent. Prefer zip-level (more reliable) — derive
     // the dominant zip from the listings if we don't have one from the query.
@@ -1979,7 +2018,9 @@ app.get('/api/str-opportunity/search', async (req, res) => {
         used: airroiCount,
         fellBack: heuristicCount
       } : null,
-      source: airroiBaseline ? 'rentcast+airroi' : 'rentcast',
+      source: `${listingsSource}${airroiBaseline ? '+airroi' : ''}`,
+      listingsSource,
+      totalAvailable,
       tookMs: Date.now() - t0
     };
     cacheSet(cacheKey, payload);
