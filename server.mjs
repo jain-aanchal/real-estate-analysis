@@ -54,9 +54,6 @@ const RENTCAST_BASE = 'https://api.rentcast.io/v1';
 const AIRROI_API_KEY = process.env.AIRROI_API_KEY;
 const AIRROI_BASE = 'https://api.airroi.com';
 const REALTOR16_RAPIDAPI_KEY = process.env.REALTOR16_RAPIDAPI_KEY;
-// Realty-in-US uses the same RapidAPI account by default — override only if
-// you want a separate key/subscription for it.
-const REALTY_IN_US_RAPIDAPI_KEY = process.env.REALTY_IN_US_RAPIDAPI_KEY || REALTOR16_RAPIDAPI_KEY;
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 const PROPERTYRADAR_API_KEY = process.env.PROPERTYRADAR_API_KEY;
 const PROPERTYRADAR_BASE = 'https://api.propertyradar.com/v1';
@@ -75,7 +72,6 @@ app.get('/api/health', (req, res) => {
     google_maps_configured: !!GOOGLE_MAPS_API_KEY,
     propertyradar_configured: !!PROPERTYRADAR_API_KEY,
     realtor16_configured: !!REALTOR16_RAPIDAPI_KEY,
-    realty_in_us_configured: !!REALTY_IN_US_RAPIDAPI_KEY,
     redfin_available: true,
     scraper_installed: playwrightInstalled,
     zillow_available: playwrightInstalled,
@@ -1699,7 +1695,6 @@ import {
   forSaleByLocation as rt16ForSaleByLocation,
   forSaleByCoords as rt16ForSaleByCoords
 } from './realtor16-client.mjs';
-import { forSale as riuForSale } from './realty-in-us-client.mjs';
 
 // Map UI property-type keys (UI uses kebab-case) to RentCast labels.
 const PROPERTY_TYPE_TO_RC = {
@@ -1945,33 +1940,6 @@ app.get('/api/str-opportunity/search', async (req, res) => {
         }
       } catch (e) {
         console.warn('[str-opp/search] Realtor16 failed, falling back to RentCast:', e.message);
-      }
-    }
-    // Middle-tier fallback: Realty-in-US (same RapidAPI account by default).
-    // Often available when Realtor16 has hit its monthly quota — same
-    // Realtor.com data, different wrapper.
-    if (!listings.length && REALTY_IN_US_RAPIDAPI_KEY) {
-      try {
-        const args = { limit: cap };
-        if (loc.kind === 'zip') args.zipCode = loc.zipCode;
-        else if (loc.kind === 'city') { args.city = loc.city; args.state = loc.state; }
-        else if (loc.kind === 'address' && listingArgs.lat) {
-          args.lat = listingArgs.lat;
-          args.lng = listingArgs.lng;
-          args.radius = radius;
-        }
-        // Pass user's view selection through to Realty-in-US for native
-        // server-side keyword filtering (water_view, hill_or_mountain_view, etc.)
-        if (filters.views && filters.views.length) args.views = filters.views;
-        const result = await riuForSale(args, REALTY_IN_US_RAPIDAPI_KEY);
-        if (result?.listings?.length) {
-          listings = result.listings;
-          totalAvailable = result.total || listings.length;
-          listingsSource = 'realty-in-us';
-          console.log(`[str-opp/search] Realty-in-US returned ${listings.length} listings (${totalAvailable} total)`);
-        }
-      } catch (e) {
-        console.warn('[str-opp/search] Realty-in-US failed, falling back to RentCast:', e.message);
       }
     }
     if (!listings.length) {
