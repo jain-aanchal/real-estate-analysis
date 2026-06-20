@@ -1947,6 +1947,37 @@ app.get('/api/str-opportunity/search', async (req, res) => {
       listingsSource = 'rentcast';
     }
 
+    // Deduplicate by normalized address — Realtor.com sometimes returns the
+    // same property under multiple listing IDs (relisted, multiple agents).
+    // Keep the listing with the lowest price (most aggressive seller) when
+    // there's a tie, otherwise the first one seen.
+    {
+      const seen = new Map();
+      const norm = (s) => String(s || '')
+        .toLowerCase()
+        .replace(/[^\w\s]/g, '')      // strip punctuation
+        .replace(/\s+/g, ' ')          // collapse whitespace
+        .replace(/\b(unit|apt|apartment|suite|ste|#)\s*([\w-]+)/gi, '#$2')
+        .trim();
+      for (const L of listings) {
+        const key = norm(L.formattedAddress || L.address);
+        if (!key) continue;
+        const existing = seen.get(key);
+        const price = Number(L.price || L.listPrice) || 0;
+        if (!existing) {
+          seen.set(key, L);
+        } else {
+          const exPrice = Number(existing.price || existing.listPrice) || 0;
+          if (price > 0 && (exPrice === 0 || price < exPrice)) seen.set(key, L);
+        }
+      }
+      const beforeDedup = listings.length;
+      listings = [...seen.values()];
+      if (listings.length < beforeDedup) {
+        console.log(`[str-opp/search] deduplicated ${beforeDedup} → ${listings.length} listings`);
+      }
+    }
+
     // Step 2b: Look up market rent. Prefer zip-level (more reliable) — derive
     // the dominant zip from the listings if we don't have one from the query.
     let marketRaw = null;
