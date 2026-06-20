@@ -1884,6 +1884,22 @@
       <label>Built before: <input type="number" id="so_yearBefore" placeholder="any" min="1800" max="2030" /></label>
     </div>
 
+    <div class="filter-row">
+      <label>Keyword:
+        <input type="text" id="so_keyword" placeholder="e.g. hotel zone, oceanfront, str-approved" style="width:260px;" oninput="renderStroppResults()" />
+      </label>
+      <span class="small-note">space-separated words; all must match (in address, type, or listing description)</span>
+    </div>
+
+    <div class="filter-row">
+      <span style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px;">View:</span>
+      <label class="filter-pill"><input type="checkbox" data-so-view="water" oninput="renderStroppResults()" /> 🌊 Water</label>
+      <label class="filter-pill"><input type="checkbox" data-so-view="city" oninput="renderStroppResults()" /> 🏙️ City</label>
+      <label class="filter-pill"><input type="checkbox" data-so-view="mountain" oninput="renderStroppResults()" /> 🏔️ Mountain</label>
+      <label class="filter-pill"><input type="checkbox" data-so-view="park" oninput="renderStroppResults()" /> 🌳 Park</label>
+      <span class="small-note">OR logic — property matches if any selected view appears in the listing text</span>
+    </div>
+
     <div class="stropp-targetcap-row">
       <label>Target cap rate:</label>
       <input type="range" id="so_targetCap" min="0" max="20" step="0.5" value="11" oninput="onTargetCapChange()" />
@@ -4997,7 +5013,8 @@ function resetStroppFilters() {
     el.checked = (i < 3); // first 3 (SFR/Condo/Townhome) on by default
   });
   ['so_brMin','so_brMax','so_baMin','so_priceMin','so_priceMax','so_yearBefore',
-   'so_multiplier','so_occupancy','so_minDscr','so_minOcc'].forEach(id => $(id) && ($(id).value = ''));
+   'so_multiplier','so_occupancy','so_minDscr','so_minOcc','so_keyword'].forEach(id => $(id) && ($(id).value = ''));
+  document.querySelectorAll('#tab-stropp [data-so-view]').forEach(el => el.checked = false);
   $('so_radius').value = '25';
   $('so_targetCap').value = 11;
   $('so_targetCapDisplay').textContent = '11.0%';
@@ -5033,13 +5050,38 @@ function renderStroppResults() {
   const targetCap = parseFloat($('so_targetCap').value) / 100;
   const minDscr = numOrNull('so_minDscr');
   const minOcc = numOrNull('so_minOcc');
+  const keyword = ($('so_keyword')?.value || '').toLowerCase().trim();
+  const views = [...document.querySelectorAll('#tab-stropp [data-so-view]:checked')].map(el => el.dataset.soView);
 
-  // Filter: target cap + min DSCR + min Occupancy, then sort
+  // View → regex patterns. Match any keyword in the searchable text.
+  const VIEW_PATTERNS = {
+    water:    /\b(ocean|sea|water|waterfront|bay|lake|lakefront|river|riverfront|gulf|beach|beachfront|harbor|shore|shoreline|lagoon|cove|pond|marina|dock)/,
+    city:    /\b(city|downtown|skyline|urban|metro|highrise|cosmopolitan)/,
+    mountain: /\b(mountain|peak|alpine|summit|ridge|hilltop|vista|valley|forest|woods)/,
+    park:    /\b(park|nature|preserve|trail|trailhead|conservation|reserve|wildlife|sanctuary|outdoor)/
+  };
+
+  // Filter: target cap + min DSCR + min Occ + keyword + view, then sort
   let list = stroppState.results.filter(r => (r.capRate || 0) >= targetCap);
   if (minDscr != null) list = list.filter(r => (r.dscr || 0) >= minDscr);
   if (minOcc != null) {
-    const occThresh = minOcc / 100;  // input is %, stored as decimal
+    const occThresh = minOcc / 100;
     list = list.filter(r => (r.occupancy || 0) >= occThresh);
+  }
+  if (keyword) {
+    // Split on whitespace, ALL words must appear in searchable text (AND logic)
+    const words = keyword.split(/\s+/).filter(Boolean);
+    list = list.filter(r => {
+      const hay = (r.searchable || r.address || '').toLowerCase();
+      return words.every(w => hay.includes(w));
+    });
+  }
+  if (views.length) {
+    // ANY checked view must match (OR logic)
+    list = list.filter(r => {
+      const hay = (r.searchable || r.address || '').toLowerCase();
+      return views.some(v => VIEW_PATTERNS[v] && VIEW_PATTERNS[v].test(hay));
+    });
   }
   const f = stroppState.sortField, d = stroppState.sortDir === 'asc' ? 1 : -1;
   list = [...list].sort((a, b) => {
@@ -5050,8 +5092,10 @@ function renderStroppResults() {
 
   const dscrText = minDscr != null ? ` & DSCR ≥ ${minDscr.toFixed(2)}` : '';
   const occText = minOcc != null ? ` & Occ ≥ ${minOcc}%` : '';
+  const kwText = keyword ? ` & keyword "${keyword}"` : '';
+  const viewText = views.length ? ` & view ${views.join('/')}` : '';
   $('so_resultCount').textContent =
-    `${list.length} properties meet target cap${dscrText}${occText} (of ${stroppState.results.length} candidates)`;
+    `${list.length} properties meet target cap${dscrText}${occText}${kwText}${viewText} (of ${stroppState.results.length} candidates)`;
   $('so_exportBtn').disabled = list.length === 0;
 
   if (!list.length) {
@@ -5073,6 +5117,27 @@ function renderStroppResults() {
         if (capGap === totalBeforeFilters) {
           const bestCap = Math.max(...stroppState.results.map(r => r.capRate || 0)) * 100;
           hint = `Try lowering <b>Target cap rate</b> (currently ${(targetCap*100).toFixed(1)}%) — best in this set is ${bestCap.toFixed(1)}%.`;
+        }
+      }
+      if (!hint && keyword) {
+        // Did keyword exclude everything?
+        const words = keyword.split(/\s+/).filter(Boolean);
+        const kwGap = stroppState.results.filter(r => {
+          const hay = (r.searchable || r.address || '').toLowerCase();
+          return !words.every(w => hay.includes(w));
+        }).length;
+        if (kwGap === totalBeforeFilters) {
+          hint = `No listings contain all of "<b>${keyword}</b>". Note: keyword search depends on listing description text — RentCast fallback listings only have address + type to search.`;
+        }
+      }
+      if (!hint && views.length) {
+        // Did view filter exclude everything?
+        const viewGap = stroppState.results.filter(r => {
+          const hay = (r.searchable || r.address || '').toLowerCase();
+          return !views.some(v => VIEW_PATTERNS[v] && VIEW_PATTERNS[v].test(hay));
+        }).length;
+        if (viewGap === totalBeforeFilters) {
+          hint = `No listings mention <b>${views.join(' / ')}</b> in their description. Try unchecking some view filters.`;
         }
       }
       if (!hint) hint = `No candidates match all filters together.`;
@@ -5298,7 +5363,10 @@ function renderStroppRecordTab(record, full) {
   const addrEnc = encodeURIComponent(addr);
   const redfinUrl  = `https://www.redfin.com/homes?location=${addrEnc}`;
   const zillowUrl  = `https://www.zillow.com/homes/${addrEnc}_rb/`;
-  const realtorUrl = `https://www.realtor.com/realestateandhomes-search?qdomain=${addrEnc}`;
+  // Prefer the actual Realtor.com permalink (we have it from Realtor16);
+  // fall back to a search-by-address URL only when there's no permalink.
+  const realtorUrl = _soActiveProperty?.permalink
+    || `https://www.realtor.com/realestateandhomes-detail/${addr.replace(/[,]/g, '').replace(/\s+/g, '-')}`;
   const mapsUrl    = `https://www.google.com/maps/search/?api=1&query=${addrEnc}`;
 
   pane.innerHTML = `
@@ -5392,21 +5460,29 @@ async function manualAirDNARefine() {
     });
     const d = await resp.json();
     const ai = d?.[r.address];
-    if (ai?.revenue) {
+    if (ai?.revenue && ai.revenue > 0) {
+      // Apply the same update logic as refineTopPicks so drawer + table stay
+      // in sync. Without this, the drawer card would update but the row in
+      // the results table behind it would still show stale values.
       r.strAnnualRevenue = ai.revenue;
       r.confidence = 'verified';
-      // Re-run client-side UW recompute with the new revenue
-      const ltrEquiv = ai.revenue / 12;
-      r.ltrMonthlyRent = ltrEquiv;  // hack: lets recomputeStroppUw work
-      $('soa_mul').value = 1.0;     // because we're now using actual STR
-      $('soa_occ').value = 100;
-      recomputeStroppUw();
-      btn.textContent = '✓ AirDNA Verified';
+      if (ai.occupancy != null) r.occupancy = ai.occupancy;
+      r.ltrMonthlyRent = ai.revenue / 12;
+      const opexPct = 0.30;
+      r.noi = Math.round(ai.revenue * (1 - opexPct) - r.price * 0.011);
+      r.capRate = Math.max(0, r.noi / r.price);
+      // Recompute drawer underwriting card with AirDNA values
+      renderStroppUwCard(r);
+      // Update the table row behind the drawer
+      renderStroppResults();
+      btn.textContent = `✓ AirDNA Verified ($${Math.round(ai.revenue).toLocaleString()})`;
     } else {
       btn.textContent = '⚠ AirDNA returned no data';
+      btn.disabled = false;
     }
   } catch (e) {
     btn.textContent = '❌ ' + e.message;
+    btn.disabled = false;
   }
 }
 
@@ -5657,6 +5733,8 @@ function readCurrentStroppFilters() {
     targetCap: $('so_targetCap').value,
     minDscr: $('so_minDscr').value,
     minOcc: $('so_minOcc').value,
+    keyword: $('so_keyword')?.value || '',
+    views: [...document.querySelectorAll('#tab-stropp [data-so-view]:checked')].map(el => el.dataset.soView),
     multiplier: $('so_multiplier').value,
     occupancy: $('so_occupancy').value,
     resultCap: $('so_resultCap').value,
@@ -5671,6 +5749,12 @@ function applyStroppFilters(saved) {
   if (saved.targetCap)  { $('so_targetCap').value = saved.targetCap; onTargetCapChange(); }
   if (saved.minDscr != null) $('so_minDscr').value = saved.minDscr;
   if (saved.minOcc != null) $('so_minOcc').value = saved.minOcc;
+  if (saved.keyword != null && $('so_keyword')) $('so_keyword').value = saved.keyword;
+  if (Array.isArray(saved.views)) {
+    document.querySelectorAll('#tab-stropp [data-so-view]').forEach(el => {
+      el.checked = saved.views.includes(el.dataset.soView);
+    });
+  }
   if (saved.multiplier) $('so_multiplier').value = saved.multiplier;
   if (saved.occupancy)  $('so_occupancy').value = saved.occupancy;
   if (saved.resultCap)  $('so_resultCap').value = saved.resultCap;
@@ -5752,9 +5836,30 @@ function exportStroppCsv() {
   const targetCap = parseFloat($('so_targetCap').value) / 100;
   const minDscr = numOrNull('so_minDscr');
   const minOcc = numOrNull('so_minOcc');
+  const keyword = ($('so_keyword')?.value || '').toLowerCase().trim();
+  const views = [...document.querySelectorAll('#tab-stropp [data-so-view]:checked')].map(el => el.dataset.soView);
+  const V = {
+    water:    /\b(ocean|sea|water|waterfront|bay|lake|lakefront|river|riverfront|gulf|beach|beachfront|harbor|shore|shoreline|lagoon|cove|pond|marina|dock)/,
+    city:    /\b(city|downtown|skyline|urban|metro|highrise|cosmopolitan)/,
+    mountain: /\b(mountain|peak|alpine|summit|ridge|hilltop|vista|valley|forest|woods)/,
+    park:    /\b(park|nature|preserve|trail|trailhead|conservation|reserve|wildlife|sanctuary|outdoor)/
+  };
   let list = stroppState.results.filter(r => (r.capRate || 0) >= targetCap);
   if (minDscr != null) list = list.filter(r => (r.dscr || 0) >= minDscr);
   if (minOcc != null) list = list.filter(r => (r.occupancy || 0) >= minOcc / 100);
+  if (keyword) {
+    const words = keyword.split(/\s+/).filter(Boolean);
+    list = list.filter(r => {
+      const hay = (r.searchable || r.address || '').toLowerCase();
+      return words.every(w => hay.includes(w));
+    });
+  }
+  if (views.length) {
+    list = list.filter(r => {
+      const hay = (r.searchable || r.address || '').toLowerCase();
+      return views.some(v => V[v] && V[v].test(hay));
+    });
+  }
   if (!list.length) return;
   const cols = ['address','propertyType','bedrooms','bathrooms','sqft','yearBuilt',
                 'price','ltrMonthlyRent','strAnnualRevenue','capRate','monthlyCF','dscr','cocReturn'];
