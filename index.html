@@ -5054,7 +5054,34 @@ function renderStroppResults() {
     `${list.length} properties meet target cap${dscrText}${occText} (of ${stroppState.results.length} candidates)`;
   $('so_exportBtn').disabled = list.length === 0;
 
-  if (!list.length) { tbody.innerHTML = ''; return; }
+  if (!list.length) {
+    // Hint at which filter is excluding everything so the user can adjust
+    let hint = '';
+    if (stroppState.results.length > 0) {
+      const totalBeforeFilters = stroppState.results.length;
+      if (minOcc != null) {
+        const occThresh = minOcc / 100;
+        const occGap = stroppState.results.filter(r => (r.occupancy || 0) < occThresh).length;
+        if (occGap === totalBeforeFilters) hint = `Try lowering <b>Min Occupancy</b> (currently ${minOcc}%) — all ${totalBeforeFilters} candidates are below it.`;
+      }
+      if (!hint && minDscr != null) {
+        const dscrGap = stroppState.results.filter(r => (r.dscr || 0) < minDscr).length;
+        if (dscrGap === totalBeforeFilters) hint = `Try lowering <b>Min DSCR</b> (currently ${minDscr}) — all ${totalBeforeFilters} candidates are below it.`;
+      }
+      if (!hint && targetCap > 0) {
+        const capGap = stroppState.results.filter(r => (r.capRate || 0) < targetCap).length;
+        if (capGap === totalBeforeFilters) {
+          const bestCap = Math.max(...stroppState.results.map(r => r.capRate || 0)) * 100;
+          hint = `Try lowering <b>Target cap rate</b> (currently ${(targetCap*100).toFixed(1)}%) — best in this set is ${bestCap.toFixed(1)}%.`;
+        }
+      }
+      if (!hint) hint = `No candidates match all filters together.`;
+    } else {
+      hint = `No candidates returned from search.`;
+    }
+    tbody.innerHTML = `<tr><td colspan="14" style="padding:24px; text-align:center; color:var(--muted); font-size:13px;">${hint}</td></tr>`;
+    return;
+  }
 
   tbody.innerHTML = list.slice(0, 1000).map((r, i) => {
     const confIcon = {
@@ -5512,7 +5539,7 @@ async function refineTopPicks() {
           // Recompute cap rate / NOI based on new revenue (lightweight)
           const opexPct = 0.30;  // 30% of revenue as rough OpEx assumption
           c.noi = Math.round(ai.revenue * (1 - opexPct) - c.price * 0.011);
-          c.capRate = c.noi / c.price;
+          c.capRate = Math.max(0, c.noi / c.price);  // clamp at 0 so filter at 0% includes them
         } else {
           c.confidence = 'estimated';  // refinement failed/no data
         }
