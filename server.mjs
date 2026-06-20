@@ -2076,6 +2076,11 @@ app.get('/api/str-opportunity/search', async (req, res) => {
         listDate: L.listDate || '',
         priceReduced: Number(L.priceReduced) || 0,
         listingStatus: L.status || '',
+        // Free-text fields for keyword + view client-side filtering.
+        // When listing comes from RentCast (fallback), only address + type are searchable.
+        searchable: L.searchable || `${(L.formattedAddress || L.address || '').toLowerCase()} ${(L.propertyType || '').toLowerCase()}`,
+        description: L.description || '',
+        tags: L.tags || '',
         capRate: uw.capRate,
         noi: Math.round(uw.noi),
         monthlyCF: Math.round(uw.monthlyCF),

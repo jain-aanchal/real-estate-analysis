@@ -56,10 +56,26 @@ export function normalizeRt16(p) {
   const yr = Number(desc.year_built || 0) || 0;
   const type = (desc.type || desc.sub_type || '').replace(/_/g, ' ');
 
+  // Capture as much free-text as possible for keyword/view filtering.
+  // Realtor.com exposes listing text under several names depending on plan.
+  const descText = String(
+    desc.text || desc.description || desc.public_remarks || desc.marketing_remarks ||
+    p.public_remarks || p.marketing_remarks || ''
+  );
+  const tags = Array.isArray(p.tags) ? p.tags.join(' ') : '';
+  const community = p.community?.description || p.community?.name || '';
+  // searchable = address + propertyType + free text — lowercased and collapsed
+  const searchable = `${street} ${city} ${state} ${zip} ${desc.type || ''} ${descText} ${tags} ${community}`
+    .toLowerCase().replace(/\s+/g, ' ').trim();
+
   return {
     // Source / IDs
     id: p.property_id || p.listing_id,
     source: 'realtor16',
+    description: descText,
+    tags,
+    community,
+    searchable,
 
     // Address fields — same names as RentCast
     formattedAddress: formatted,
